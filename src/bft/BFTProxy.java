@@ -117,6 +117,7 @@ public class BFTProxy {
             for (int i = 0; i < poolSize; i++) {
                 
                 Socket socket = recvServer.accept();
+                socket.setTcpNoDelay(true);
                 recvPool[i] = new ReceiverThread(socket, i + 1001);
                 recvPool[i].start();
                 
