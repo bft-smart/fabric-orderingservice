@@ -71,7 +71,7 @@ public class BFTNode extends DefaultRecoverable {
     Identities.SerializedIdentity ident;
     
     //measurements
-    private int interval = 1000;
+    private int interval = 10000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
     private long sigsMeasurementStartTime = -1;
