@@ -52,6 +52,15 @@ public class BFTProxy {
     private static Timer timer = new Timer();
         
     private static Log logger;
+    
+    //measurements
+    private static int interval = 10000;
+    private static long envelopeMeasurementStartTime = -1;
+    private static long blockMeasurementStartTime = -1;
+    private static long sigsMeasurementStartTime = -1;
+    private static int countEnvelopes = 0;
+    private static int countBlocks = 0;
+    private static int countSigs = 0;
 
     public static void main(String args[]) {
 
@@ -237,6 +246,21 @@ public class BFTProxy {
                 //logger.debug("Envelope Payload" + Arrays.toString(env.getPayload().toByteArray()));
 
                 this.out.invokeAsynchRequest(bytes, null, TOMMessageType.ORDERED_REQUEST);
+
+                if (envelopeMeasurementStartTime == -1) {
+                    envelopeMeasurementStartTime = System.currentTimeMillis();
+                }
+
+                countEnvelopes++;
+
+                if (countEnvelopes % interval == 0) {
+
+                    float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
+                    logger.info("Throughput = " + tp + " envelopes/sec");
+                    envelopeMeasurementStartTime = System.currentTimeMillis();
+
+                }
+        
                 //byte[] reply = proxy.invokeOrdered(bytes);
 
                 //by = new byte[8];
