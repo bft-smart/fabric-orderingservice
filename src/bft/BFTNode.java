@@ -179,7 +179,7 @@ public class BFTNode extends DefaultRecoverable {
         
         if (msgCtx.getSequence() == 1 && orderers.contains(msgCtx.getSender())) {
             
-            if (lastBlockHeader != null && lastBlockHeader.getNumber() > 0) return new byte[0]; 
+            if (lastBlockHeader != null) return new byte[0]; 
             
             Common.BlockHeader header = null;
             try {
