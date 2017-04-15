@@ -142,13 +142,13 @@ public class BFTProxy {
 
         long size = readLong(is);
 
-        logger.debug("Read number of bytes: " + size);
+        //logger.debug("Read number of bytes: " + size);
 
         byte[] bytes = new byte[(int) size];
 
         is.readFully(bytes);
 
-        logger.debug("Read all bytes!");
+        //logger.debug("Read all bytes!");
 
         return bytes;
 
@@ -238,7 +238,7 @@ public class BFTProxy {
                     continue;
                 }
                 
-                logger.debug("Received envelope at connection #" + this.id);
+                //logger.debug("Received envelope at connection #" + this.id);
                 
                 resetTimer();
 
