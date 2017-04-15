@@ -45,7 +45,7 @@ public class BFTProxy {
     private static long MaxMessageCount = 0;
     private static long BatchTimeout = 0;
     private static int poolSize = 0;
-    private static final int initID = 0;
+    private static int initID;
 
     private static AsynchServiceProxy proxy;
     private static ProxyReplyListener listener;
@@ -61,8 +61,9 @@ public class BFTProxy {
         }    
         
         BFTProxy.logger = LogFactory.getLog(BFTProxy.class);
+        initID = Integer.parseInt(args[0]);
         
-        proxy = new AsynchServiceProxy(Integer.parseInt(args[0]), BFTNode.BFTSMART_CONFIG_FOLDER);
+        proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         listener = new ProxyReplyListener(proxy.getViewManager());
         
         int recvPort = Integer.parseInt(args[1]);
@@ -118,7 +119,7 @@ public class BFTProxy {
                 
                 Socket socket = recvServer.accept();
                 socket.setTcpNoDelay(true);
-                recvPool[i] = new ReceiverThread(socket, i + 1001);
+                recvPool[i] = new ReceiverThread(socket, i + initID + 1);
                 recvPool[i].start();
                 
             }
