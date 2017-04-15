@@ -7,6 +7,8 @@ package bft;
 
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessageType;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -35,7 +37,7 @@ public class BFTProxy {
      */
     private static ServerSocket recvServer = null;
     private static ServerSocket sendServer = null;
-    private static DataInputStream is;
+    private static BufferedInputStream is;
     private static DataOutputStream os;
     private static Socket recvSocket = null;
     private static Socket sendSocket = null;
@@ -93,7 +95,7 @@ public class BFTProxy {
 
             recvSocket = recvServer.accept();
             sendSocket = sendServer.accept();
-            is = new DataInputStream(recvSocket.getInputStream());
+            is = new BufferedInputStream(recvSocket.getInputStream());
             os = new DataOutputStream(sendSocket.getOutputStream());
 
             new SenderThread().start();
@@ -128,6 +130,7 @@ public class BFTProxy {
                 
                 Socket socket = recvServer.accept();
                 socket.setTcpNoDelay(true);
+                socket.setReceiveBufferSize(64 * 1024);
                 recvPool[i] = new ReceiverThread(socket, i + initID + 1);
                 recvPool[i].start();
                 
@@ -138,7 +141,7 @@ public class BFTProxy {
         }
     }
 
-    private static byte[] readBytes(DataInputStream is) throws IOException {
+    private static byte[] readBytes(BufferedInputStream is) throws IOException {
 
         long size = readLong(is);
 
@@ -146,7 +149,7 @@ public class BFTProxy {
 
         byte[] bytes = new byte[(int) size];
 
-        is.readFully(bytes);
+        is.read(bytes);
 
         //logger.debug("Read all bytes!");
 
@@ -154,7 +157,7 @@ public class BFTProxy {
 
     }
     
-    private static long readLong(DataInputStream is) throws IOException {
+    private static long readLong(BufferedInputStream is) throws IOException {
         byte[] buffer = new byte[8];
 
         is.read(buffer);
@@ -213,14 +216,14 @@ public class BFTProxy {
         
         private int id;
         private Socket recv;
-        private DataInputStream input;
+        private BufferedInputStream input;
         private AsynchServiceProxy out;
         
         public ReceiverThread(Socket recv, int id) throws IOException {
-            
+                        
             this.id = id;
             this.recv = recv;
-            this.input = new DataInputStream(this.recv.getInputStream());
+            this.input = new BufferedInputStream(this.recv.getInputStream());
             this.out = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
         }
