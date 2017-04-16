@@ -7,6 +7,9 @@ package bft;
 
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessageType;
+import com.etsy.net.JUDS;
+import com.etsy.net.UnixDomainSocket;
+import com.etsy.net.UnixDomainSocketServer;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,11 +40,11 @@ public class BFTProxy {
     /**
      * @param args the command line arguments
      */
-    private static ServerSocket recvServer = null;
+    private static UnixDomainSocketServer recvServer = null;
     private static ServerSocket sendServer = null;
-    private static BufferedInputStream is;
+    private static DataInputStream is;
     private static DataOutputStream os;
-    private static Socket recvSocket = null;
+    private static UnixDomainSocket recvSocket = null;
     private static Socket sendSocket = null;
     private static ReceiverThread[] recvPool = null;
     private static ExecutorService executor = null;
@@ -86,7 +89,7 @@ public class BFTProxy {
         proxy.getCommunicationSystem().setReplyReceiver(listener);
 
         try {
-            recvServer = new ServerSocket(recvPort);
+            recvServer = new  UnixDomainSocketServer("/tmp/bft.sock", JUDS.SOCK_STREAM, 10);
             sendServer = new ServerSocket(sendPort);
         } catch (IOException e) {
             e.printStackTrace();
@@ -95,10 +98,10 @@ public class BFTProxy {
         try {
 
             logger.info("Waiting for local connections...");
-
+            
             recvSocket = recvServer.accept();
             sendSocket = sendServer.accept();
-            is = new BufferedInputStream(recvSocket.getInputStream());
+            is = new DataInputStream(recvSocket.getInputStream());
             os = new DataOutputStream(sendSocket.getOutputStream());
 
             new SenderThread().start();
@@ -133,11 +136,10 @@ public class BFTProxy {
 
             for (int i = 0; i < poolSize; i++) {
                 
-                Socket socket = recvServer.accept();
-                socket.setTcpNoDelay(true);
-                socket.setReceiveBufferSize(64 * 1024);
-                //recvPool[i] = new ReceiverThread(socket, i + initID + 1);
-                //recvPool[i].start();
+                UnixDomainSocket socket = recvServer.accept();
+                
+                //socket.setTcpNoDelay(true);
+                //socket.setReceiveBufferSize(64 * 1024);
                 
                 executor.execute(new ReceiverThread(socket, i + initID + 1));
                 
@@ -148,23 +150,23 @@ public class BFTProxy {
         }
     }
 
-    private static byte[] readBytes(BufferedInputStream is) throws IOException {
+    private static byte[] readBytes(DataInputStream is) throws IOException {
 
         long size = readLong(is);
 
-        //logger.debug("Read number of bytes: " + size);
+        logger.debug("Read number of bytes: " + size);
 
         byte[] bytes = new byte[(int) size];
 
         is.read(bytes);
 
-        //logger.debug("Read all bytes!");
+        logger.debug("Read all bytes!");
 
         return bytes;
 
     }
     
-    private static long readLong(BufferedInputStream is) throws IOException {
+    private static long readLong(DataInputStream is) throws IOException {
         byte[] buffer = new byte[8];
 
         is.read(buffer);
@@ -222,15 +224,15 @@ public class BFTProxy {
     private static class ReceiverThread extends Thread {
         
         private int id;
-        private Socket recv;
-        private BufferedInputStream input;
+        private UnixDomainSocket recv;
+        private DataInputStream input;
         private AsynchServiceProxy out;
         
-        public ReceiverThread(Socket recv, int id) throws IOException {
+        public ReceiverThread(UnixDomainSocket recv, int id) throws IOException {
                         
             this.id = id;
             this.recv = recv;
-            this.input = new BufferedInputStream(this.recv.getInputStream());
+            this.input = new DataInputStream(this.recv.getInputStream());
             this.out = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
         }
