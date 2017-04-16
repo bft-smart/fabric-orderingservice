@@ -19,6 +19,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.logging.Log;
@@ -42,6 +44,7 @@ public class BFTProxy {
     private static Socket recvSocket = null;
     private static Socket sendSocket = null;
     private static ReceiverThread[] recvPool = null;
+    private static ExecutorService executor = null;
 
     private static long PreferredMaxBytes = 0;
     private static long MaxMessageCount = 0;
@@ -103,8 +106,8 @@ public class BFTProxy {
             poolSize = (int) readInt();
 
             logger.info("Read pool size: " + poolSize);
-            recvPool = new ReceiverThread[poolSize];
-            
+            //recvPool = new ReceiverThread[poolSize];
+                        
             PreferredMaxBytes = readInt();
 
             logger.info("Read PreferredMaxBytes: " + PreferredMaxBytes);
@@ -126,13 +129,17 @@ public class BFTProxy {
             
             timer.schedule(new BatchTimeout(), (BatchTimeout / 1000000));
             
+            executor = Executors.newFixedThreadPool(poolSize);
+
             for (int i = 0; i < poolSize; i++) {
                 
                 Socket socket = recvServer.accept();
                 socket.setTcpNoDelay(true);
                 socket.setReceiveBufferSize(64 * 1024);
-                recvPool[i] = new ReceiverThread(socket, i + initID + 1);
-                recvPool[i].start();
+                //recvPool[i] = new ReceiverThread(socket, i + initID + 1);
+                //recvPool[i].start();
+                
+                executor.execute(new ReceiverThread(socket, i + initID + 1));
                 
             }
             
