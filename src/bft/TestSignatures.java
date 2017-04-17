@@ -121,7 +121,7 @@ public class TestSignatures {
             if (interval > 0) {
                 
                 try {
-                    Thread.sleep(interval);
+                    Thread.sleep(0, interval);
                 } catch (InterruptedException ex) {
                     Logger.getLogger(TestSignatures.class.getName()).log(Level.SEVERE, null, ex);
                 }
