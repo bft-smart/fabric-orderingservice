@@ -56,6 +56,7 @@ public class TestSignatures {
     private static final int BATCH_SIZE = 10;
     private static final int ENV_SIZE = 1024;
     private static final int NUM_BLOCKS = 100;
+    
     private static final String Mspid = "DEFAULT";
 
     private static Random rand;
@@ -78,6 +79,8 @@ public class TestSignatures {
         TestSignatures.privKey = getPemPrivateKey(args[1]);
         parseCertificate(args[2]);
         TestSignatures.ident = getSerializedIdentity();
+        
+        int interval = Integer.parseInt(args[3]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
@@ -114,6 +117,15 @@ public class TestSignatures {
         System.out.println("Generating signatures with a pool of " + NUM_BLOCKS + " blocks... ");
         
         while (true) {
+            
+            if (interval > 0) {
+                
+                try {
+                    Thread.sleep(interval);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(TestSignatures.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
             
             TestSignatures.executor.execute(new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)]));
         }
