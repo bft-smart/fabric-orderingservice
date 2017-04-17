@@ -321,6 +321,14 @@ public class TestSignatures {
                 //create signatures
                 Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, this.block.getHeader());
                 
+                
+                if (TestSignatures.twoSigs) {
+                
+                    byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
+                    Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, this.block.getHeader());
+
+
+                }
 
                 countSigs++;
 
@@ -331,25 +339,8 @@ public class TestSignatures {
                     sigsMeasurementStartTime = System.currentTimeMillis();
 
                 }
-                
-                if (TestSignatures.twoSigs) {
-                
-                    byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                    Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, this.block.getHeader());
-
-                    countSigs++;
-
-                    if (countSigs % interval == 0) {
-
-                        float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                        System.out.println("Throughput = " + tp + " sigs/sec");
-                        sigsMeasurementStartTime = System.currentTimeMillis();
-
-                    }
-
-                }
-                
-
+                    
+                    
             } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
                 Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
             }
