@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -76,7 +77,11 @@ public class TestSignatures {
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
         //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
-        TestSignatures.executor = Executors.newCachedThreadPool();
+        TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
+            Thread t = new Thread(r);
+            t.setPriority(Thread.MAX_PRIORITY);
+            return t;
+        });
         TestSignatures.privKey = getPemPrivateKey(args[1]);
         parseCertificate(args[2]);
         TestSignatures.ident = getSerializedIdentity();
