@@ -82,11 +82,11 @@ public class TestSignatures {
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
         });
-        TestSignatures.privKey = getPemPrivateKey(args[1]);
-        parseCertificate(args[2]);
+        TestSignatures.privKey = getPemPrivateKey(args[0]);
+        parseCertificate(args[1]);
         TestSignatures.ident = getSerializedIdentity();
         
-        int interval = Integer.parseInt(args[3]);
+        boolean multiThread = Boolean.parseBoolean(args[2]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
@@ -124,16 +124,12 @@ public class TestSignatures {
         
         while (true) {
             
-            if (interval > 0) {
-                
-                try {
-                    Thread.sleep(0, interval);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(TestSignatures.class.getName()).log(Level.SEVERE, null, ex);
-                }
+            if (multiThread) {
+                TestSignatures.executor.execute(new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)]));
+        }
+            else {
+                (new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)])).run();
             }
-            
-            TestSignatures.executor.execute(new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)]));
         }
         
         
