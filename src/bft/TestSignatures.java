@@ -78,11 +78,13 @@ public class TestSignatures {
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
         //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
-        TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
+       
+        /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
-        });
+        });*/
+        TestSignatures.executor = Executors.newWorkStealingPool();
         TestSignatures.privKey = getPemPrivateKey(args[0]);
         parseCertificate(args[1]);
         TestSignatures.ident = getSerializedIdentity();
