@@ -69,7 +69,7 @@ public class TestSignatures {
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
-    private static int interval = 10000;
+    private static int interval = 100000;
     private static int countSigs = 0;
     
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException {
