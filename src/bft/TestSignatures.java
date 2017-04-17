@@ -65,6 +65,7 @@ public class TestSignatures {
     private static PrivateKey privKey = null;
     private static byte[] serializedCert = null;
     private static Identities.SerializedIdentity ident;
+    private static boolean twoSigs = true;
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
@@ -87,6 +88,7 @@ public class TestSignatures {
         TestSignatures.ident = getSerializedIdentity();
         
         boolean multiThread = Boolean.parseBoolean(args[2]);
+        TestSignatures.twoSigs =  Boolean.parseBoolean(args[3]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
@@ -330,16 +332,20 @@ public class TestSignatures {
 
                 }
                 
-                byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, this.block.getHeader());
+                if (TestSignatures.twoSigs) {
+                
+                    byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
+                    Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, this.block.getHeader());
 
-                countSigs++;
+                    countSigs++;
 
-                if (countSigs % interval == 0) {
+                    if (countSigs % interval == 0) {
 
-                    float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                    System.out.println("Throughput = " + tp + " sigs/sec");
-                    sigsMeasurementStartTime = System.currentTimeMillis();
+                        float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
+                        System.out.println("Throughput = " + tp + " sigs/sec");
+                        sigsMeasurementStartTime = System.currentTimeMillis();
+
+                    }
 
                 }
                 
