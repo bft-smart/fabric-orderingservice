@@ -75,7 +75,8 @@ public class TestSignatures {
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
-        TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
+        //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
+        TestSignatures.executor = Executors.newCachedThreadPool();
         TestSignatures.privKey = getPemPrivateKey(args[1]);
         parseCertificate(args[2]);
         TestSignatures.ident = getSerializedIdentity();
