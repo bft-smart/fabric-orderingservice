@@ -70,8 +70,8 @@ public class TestSignaturesZMQ {
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
         
         
-        if(args.length < 7) {
-            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> <sig thread batch>");
+        if(args.length < 6) {
+            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> ");
             System.exit(-1);
         }  
         
