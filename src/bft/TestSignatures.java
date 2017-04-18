@@ -78,13 +78,13 @@ public class TestSignatures {
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
-        //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[4]));
+        TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[4]));
        
-        TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
+        /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
-        });
+        });*/
         //TestSignatures.executor = Executors.newWorkStealingPool();
         
         TestSignatures.privKey = getPemPrivateKey(args[0]);
@@ -128,7 +128,8 @@ public class TestSignatures {
         
         System.out.println("Generating signatures with a pool of " + NUM_BLOCKS + " blocks... ");
         
-        LinkedBlockingQueue<Common.Block> queue = new LinkedBlockingQueue<>();
+        LinkedBlockingQueue<SignerThread> queue = new LinkedBlockingQueue<>();
+        
         for (int i = 0 ; i < Integer.parseInt(args[4]); i++) {
 
             TestSignatures.executor.execute(new SignerThread(queue));
@@ -138,7 +139,7 @@ public class TestSignatures {
         while (true) {
             
             //if (multiThread) {
-                queue.put(blocks[rand.nextInt(NUM_BLOCKS)]);
+            queue.take().input(blocks[rand.nextInt(NUM_BLOCKS)]);
             //}
            
         }
@@ -251,7 +252,8 @@ public class TestSignatures {
         
         MessageDigest digestEngine;
         Signature signEngine;
-        LinkedBlockingQueue<Common.Block>  queue;
+        LinkedBlockingQueue<Common.Block>  input;
+        LinkedBlockingQueue<SignerThread>  output;
 
         /*SignerThread(Common.Block block) {
 
@@ -259,12 +261,17 @@ public class TestSignatures {
             
         }*/
         
-        SignerThread(LinkedBlockingQueue<Common.Block>  queue) {
+        SignerThread(LinkedBlockingQueue<SignerThread>  output) {
 
-            this.queue = queue;
-            
+            this.input = new LinkedBlockingQueue<>();
+            this.output = output;
         }
 
+        public void input(Common.Block block) throws InterruptedException {
+            
+            input.put(block);
+            
+        }
         private byte[] encodeBlockHeaderASN1(Common.BlockHeader header) throws IOException {
 
             // encode the header in ASN1 format
@@ -327,7 +334,7 @@ public class TestSignatures {
             while (true) {
                 try {
 
-                    Common.Block block = queue.take();
+                    Common.Block block = input.take();
                     
                     if (sigsMeasurementStartTime == -1) {
                         sigsMeasurementStartTime = System.currentTimeMillis();
@@ -359,6 +366,7 @@ public class TestSignatures {
 
                     }
 
+                    output.put(this);
 
                 } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
                     Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
