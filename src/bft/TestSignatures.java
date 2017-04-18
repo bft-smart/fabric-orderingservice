@@ -78,14 +78,14 @@ public class TestSignatures {
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
-        //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
+        TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[4]));
        
         /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
         });*/
-        TestSignatures.executor = Executors.newWorkStealingPool();
+        //TestSignatures.executor = Executors.newWorkStealingPool();
         
         TestSignatures.privKey = getPemPrivateKey(args[0]);
         parseCertificate(args[1]);
@@ -129,7 +129,7 @@ public class TestSignatures {
         System.out.println("Generating signatures with a pool of " + NUM_BLOCKS + " blocks... ");
         
         LinkedBlockingQueue<Common.Block> queue = new LinkedBlockingQueue<>();
-        for (int i = 0 ; i < 16; i++) {
+        for (int i = 0 ; i < Integer.parseInt(args[4]); i++) {
 
             TestSignatures.executor.execute(new SignerThread(queue));
             
