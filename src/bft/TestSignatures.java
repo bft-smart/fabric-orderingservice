@@ -25,6 +25,8 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -148,8 +150,13 @@ public class TestSignatures {
             
             //if (multiThread) {
             SignerThread s = queue.take();
+            
+            LinkedList<Common.Block> l = new LinkedList<>();
+            
             for (int i = 0; i < Integer.parseInt(args[4]); i++)
-                s.input(blocks[rand.nextInt(NUM_BLOCKS)]);
+                l.add(blocks[rand.nextInt(NUM_BLOCKS)]);
+            
+            s.input(l);
             //}
            
         }
@@ -278,13 +285,16 @@ public class TestSignatures {
 
             this.input = new LinkedBlockingQueue<>();
             this.output = output;
-            input(firstBlock);
+            LinkedList<Common.Block> l = new LinkedList<>();
+            l.add(firstBlock);
+            input(l);
         }
 
-        public void input(Common.Block block) throws InterruptedException {
+        public void input(Collection<Common.Block> blocks) throws InterruptedException {
             
             inputLock.lock();
-            input.put(block);
+            
+            input.addAll(blocks);
             
             notEmptyInput.signalAll();
             inputLock.unlock();
