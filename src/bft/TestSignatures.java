@@ -132,7 +132,7 @@ public class TestSignatures {
         
         for (int i = 0 ; i < Integer.parseInt(args[4]); i++) {
 
-            TestSignatures.executor.execute(new SignerThread(queue));
+            TestSignatures.executor.execute(new SignerThread(queue, blocks[rand.nextInt(NUM_BLOCKS)]));
             
         }
         
@@ -261,10 +261,11 @@ public class TestSignatures {
             
         }*/
         
-        SignerThread(LinkedBlockingQueue<SignerThread>  output) {
+        SignerThread(LinkedBlockingQueue<SignerThread>  output, Common.Block firstBlock) throws InterruptedException {
 
             this.input = new LinkedBlockingQueue<>();
             this.output = output;
+            input(firstBlock);
         }
 
         public void input(Common.Block block) throws InterruptedException {
