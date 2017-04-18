@@ -410,10 +410,8 @@ public class TestSignatures {
                     
                     output.put(this);
 
-                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
-                    Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(TestSignatures.class.getName()).log(Level.SEVERE, null, ex);
+                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException ex) {
+                    ex.printStackTrace();
                 }
             }
         }
