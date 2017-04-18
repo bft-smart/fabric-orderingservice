@@ -162,8 +162,14 @@ public class TestSignatures {
                         
             LinkedList<Common.Block> l = new LinkedList<>();
             
-            for (int j = 0; j < sigBatch; j++)
-                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
+            for (int j = 0; j < sigBatch; j++) {
+                
+                // Force the code to always sign different data
+                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+                
+                l.add(block.build());
+            }
             
             s.input(l);
             
