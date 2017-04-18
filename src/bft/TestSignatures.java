@@ -77,7 +77,7 @@ public class TestSignatures {
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
-    private static int interval = 100000;
+    private static int interval;
     private static int countSigs = 0;
     
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
@@ -103,6 +103,8 @@ public class TestSignatures {
         TestSignatures.ident = getSerializedIdentity();
         
         TestSignatures.twoSigs =  Boolean.parseBoolean(args[2]);
+        
+        interval = 10*Integer.parseInt(args[4]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
@@ -146,6 +148,8 @@ public class TestSignatures {
             
         }
         
+        sigsMeasurementStartTime = System.currentTimeMillis();
+        
         while (true) {
             
             //if (multiThread) {
@@ -158,6 +162,16 @@ public class TestSignatures {
             
             s.input(l);
             //}
+            
+            countSigs += Integer.parseInt(args[4]);
+
+            if (countSigs % interval == 0) {
+
+                float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
+                System.out.println("Throughput = " + tp + " sigs/sec");
+                sigsMeasurementStartTime = System.currentTimeMillis();
+
+            }
            
         }
         
@@ -373,9 +387,7 @@ public class TestSignatures {
                     
                     for (Common.Block block : blocks) {
                         
-                        if (sigsMeasurementStartTime == -1) {
-                            sigsMeasurementStartTime = System.currentTimeMillis();
-                        }
+                        
 
                         //create nonce
                         byte[] nonces = new byte[rand.nextInt(10)];
@@ -393,15 +405,7 @@ public class TestSignatures {
 
                         }
 
-                        countSigs++;
-
-                        if (countSigs % interval == 0) {
-
-                            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                            System.out.println("Throughput = " + tp + " sigs/sec");
-                            sigsMeasurementStartTime = System.currentTimeMillis();
-
-                        }
+                        
                     }
                     
                     output.put(this);
