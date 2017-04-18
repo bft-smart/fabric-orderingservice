@@ -6,6 +6,7 @@
 package bft;
 
 import bft.BFTNode;
+import bftsmart.consensus.Decision;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import com.google.protobuf.ByteString;
@@ -22,6 +23,7 @@ import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -30,6 +32,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -259,6 +264,9 @@ public class TestSignatures {
         Signature signEngine;
         LinkedBlockingQueue<Common.Block>  input;
         LinkedBlockingQueue<SignerThread>  output;
+        
+        private final Lock inputLock = new ReentrantLock();
+        private final Condition notEmptyInput = inputLock.newCondition();
 
         /*SignerThread(Common.Block block) {
 
@@ -275,7 +283,11 @@ public class TestSignatures {
 
         public void input(Common.Block block) throws InterruptedException {
             
+            inputLock.lock();
             input.put(block);
+            
+            notEmptyInput.signalAll();
+            inputLock.unlock();
             
         }
         private byte[] encodeBlockHeaderASN1(Common.BlockHeader header) throws IOException {
@@ -339,39 +351,49 @@ public class TestSignatures {
 
             while (true) {
                 try {
-
-                    Common.Block block = input.take();
                     
-                    if (sigsMeasurementStartTime == -1) {
-                        sigsMeasurementStartTime = System.currentTimeMillis();
+                    ArrayList<Common.Block> blocks = new ArrayList<>();
+
+                    inputLock.lock();
+                    if(input.isEmpty()) {
+                        notEmptyInput.await();
                     }
+                    input.drainTo(blocks);
+                    inputLock.unlock();
+                    
+                    for (Common.Block block : blocks) {
+                        
+                        if (sigsMeasurementStartTime == -1) {
+                            sigsMeasurementStartTime = System.currentTimeMillis();
+                        }
 
-                    //create nonce
-                    byte[] nonces = new byte[rand.nextInt(10)];
-                    rand.nextBytes(nonces);
+                        //create nonce
+                        byte[] nonces = new byte[rand.nextInt(10)];
+                        rand.nextBytes(nonces);
 
-                    //create signatures
-                    Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, block.getHeader());
-
-
-                    if (TestSignatures.twoSigs) {
-
-                        byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, block.getHeader());
+                        //create signatures
+                        Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, block.getHeader());
 
 
+                        if (TestSignatures.twoSigs) {
+
+                            byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
+                            Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, block.getHeader());
+
+
+                        }
+
+                        countSigs++;
+
+                        if (countSigs % interval == 0) {
+
+                            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
+                            System.out.println("Throughput = " + tp + " sigs/sec");
+                            sigsMeasurementStartTime = System.currentTimeMillis();
+
+                        }
                     }
-
-                    countSigs++;
-
-                    if (countSigs % interval == 0) {
-
-                        float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                        System.out.println("Throughput = " + tp + " sigs/sec");
-                        sigsMeasurementStartTime = System.currentTimeMillis();
-
-                    }
-
+                    
                     output.put(this);
 
                 } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
