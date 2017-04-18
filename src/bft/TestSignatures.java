@@ -70,7 +70,6 @@ public class TestSignatures {
     private static PrivateKey privKey = null;
     private static byte[] serializedCert = null;
     private static Identities.SerializedIdentity ident;
-    private static boolean twoSigs = true;
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
@@ -78,6 +77,12 @@ public class TestSignatures {
     private static int countSigs = 0;
     
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
+        
+        
+        if(args.length < 7) {
+            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> <sig thread batch>");
+            System.exit(-1);
+        }  
         
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
@@ -88,7 +93,7 @@ public class TestSignatures {
         
         int batchSize = Integer.parseInt(args[2]);
         int envSize =Integer.parseInt(args[3]);
-        TestSignatures.twoSigs =  Boolean.parseBoolean(args[4]);
+        boolean twoSigs =  Boolean.parseBoolean(args[4]);
         int parallelism = Integer.parseInt(args[5]);
         int sigBatch = Integer.parseInt(args[6]);
 
@@ -151,7 +156,7 @@ public class TestSignatures {
 
         for (int i = 0 ; i < parallelism; i++) {
 
-            SignerThread s = new SignerThread(queue);
+            SignerThread s = new SignerThread(queue, twoSigs);
                         
             LinkedList<Common.Block> l = new LinkedList<>();
             
@@ -295,10 +300,12 @@ public class TestSignatures {
 
         //private Common.Block block;
         
-        MessageDigest digestEngine;
-        Signature signEngine;
-        LinkedBlockingQueue<Common.Block>  input;
-        LinkedBlockingQueue<SignerThread>  output;
+        private MessageDigest digestEngine;
+        private Signature signEngine;
+        private LinkedBlockingQueue<Common.Block>  input;
+        private LinkedBlockingQueue<SignerThread>  output;
+        
+        private boolean twoSigs;
         
         private final Lock inputLock = new ReentrantLock();
         private final Condition notEmptyInput = inputLock.newCondition();
@@ -309,10 +316,11 @@ public class TestSignatures {
             
         }*/
         
-        SignerThread(LinkedBlockingQueue<SignerThread>  output) throws InterruptedException {
+        SignerThread(LinkedBlockingQueue<SignerThread>  output, boolean twoSigs) throws InterruptedException {
 
             this.input = new LinkedBlockingQueue<>();
             this.output = output;
+            this.twoSigs = twoSigs;
             //LinkedList<Common.Block> l = new LinkedList<>();
             //l.add(firstBlock);
             //input(l);
@@ -411,7 +419,7 @@ public class TestSignatures {
                         Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, block.getHeader());
 
 
-                        if (TestSignatures.twoSigs) {
+                        if (twoSigs) {
 
                             byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
                             Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, block.getHeader());
