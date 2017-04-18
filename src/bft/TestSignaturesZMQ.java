@@ -42,11 +42,14 @@ import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
 import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 
+import org.zeromq.ZMQ;
+import org.zeromq.ZMQ.Context;
+import org.zeromq.ZMQ.Socket;
 /**
  *
  * @author joao
  */
-public class TestSignatures {
+public class TestSignaturesZMQ {
     
     private static CryptoPrimitives crypto;
     private static final int NUM_BATCHES = 1000;
@@ -72,9 +75,9 @@ public class TestSignatures {
             System.exit(-1);
         }  
         
-        TestSignatures.crypto = new CryptoPrimitives();
-        TestSignatures.crypto.init();
-        TestSignatures.rand = new Random(System.nanoTime());
+        TestSignaturesZMQ.crypto = new CryptoPrimitives();
+        TestSignaturesZMQ.crypto.init();
+        TestSignaturesZMQ.rand = new Random(System.nanoTime());
         
         String privKey = args[0];
         String cert = args[1];
@@ -83,7 +86,6 @@ public class TestSignatures {
         int envSize =Integer.parseInt(args[3]);
         boolean twoSigs =  Boolean.parseBoolean(args[4]);
         int parallelism = Integer.parseInt(args[5]);
-        int sigBatch = Integer.parseInt(args[6]);
 
         /*TestSignatures.executor = Executors.newFixedThreadPool(parallelism, (Runnable r) -> {
             Thread t = new Thread(r);
@@ -96,14 +98,21 @@ public class TestSignatures {
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
         });*/
-        TestSignatures.executor = Executors.newWorkStealingPool(parallelism);
+        TestSignaturesZMQ.executor = Executors.newWorkStealingPool(parallelism);
         
-        TestSignatures.privKey = getPemPrivateKey(privKey);
+        TestSignaturesZMQ.privKey = getPemPrivateKey(privKey);
         parseCertificate(cert);
-        TestSignatures.ident = getSerializedIdentity();
+        TestSignaturesZMQ.ident = getSerializedIdentity();
                 
-        interval = 100 * sigBatch;
+        interval = 1000;
         
+        
+        //ZMQ
+        Context context = ZMQ.context(1);
+        Socket broker = context.socket(ZMQ.ROUTER);
+        //broker.bind("tcp://*:5671");
+        broker.bind("ipc:///tmp/pipeline");
+                    
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + batchSize + " envelopes each... ");
         byte[][][] batches = new byte[NUM_BATCHES][batchSize][];
@@ -130,7 +139,7 @@ public class TestSignatures {
             
             rand.nextBytes(dummyDigest);
                     
-            dummyDigest = TestSignatures.crypto.hash(dummyDigest);
+            dummyDigest = TestSignaturesZMQ.crypto.hash(dummyDigest);
             
             
             blocks[i] = createNextBlock(i, dummyDigest, batches[rand.nextInt(batches.length)]);
@@ -139,38 +148,27 @@ public class TestSignatures {
         System.out.println(" done!");
         
         System.out.println("Generating signatures with a pool of " + NUM_BATCHES + " blocks... ");
-        
-        LinkedBlockingQueue<SignerThread> queue = new LinkedBlockingQueue<>();
-        
+                
         sigsMeasurementStartTime = System.currentTimeMillis();
 
         for (int i = 0 ; i < parallelism; i++) {
 
-            SignerThread s = new SignerThread(queue, twoSigs);
-                        
-            LinkedList<Common.Block> l = new LinkedList<>();
+            SignerThread s = new SignerThread(twoSigs);
             
-            for (int j = 0; j < sigBatch; j++) {
-                
-                // Force the code to always sign different data
-                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
-                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
-                
-                l.add(block.build());
-            }
-            
-            s.input(l);
-            
-            TestSignatures.executor.execute(s);
+            TestSignaturesZMQ.executor.execute(s);
 
         }
                 
         while (true) {
             
+         
+                            
+           byte[] identity = broker.recv();
             //if (multiThread) {
-            SignerThread s = queue.take();
+           
+
             
-            countSigs += sigBatch;
+            countSigs++;
 
             if (countSigs % interval == 0) {
 
@@ -180,12 +178,19 @@ public class TestSignatures {
 
             }
             
-            LinkedList<Common.Block> l = new LinkedList<>();
+            broker.send(identity, ZMQ.SNDMORE);
+
+
+            broker.recv(0);     //  Envelope delimiter
+
+
+            broker.recv(0);     //  Response from worker
+
+
+            broker.sendMore("");            
             
-            for (int i = 0; i < sigBatch; i++)
-                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
-            
-            s.input(l);
+            broker.send(blocks[rand.nextInt(NUM_BATCHES)].toByteArray(), 0);
+
             //}
             
         }
@@ -208,7 +213,7 @@ public class TestSignatures {
             writer.close();
             strWriter.close();
             
-            TestSignatures.serializedCert = strWriter.toString().getBytes();
+            TestSignaturesZMQ.serializedCert = strWriter.toString().getBytes();
             
             
     }
@@ -294,42 +299,20 @@ public class TestSignatures {
 
     private static class SignerThread implements Runnable {
 
-        //private Common.Block block;
-        
-        private LinkedBlockingQueue<Common.Block>  input;
-        private LinkedBlockingQueue<SignerThread>  output;
-        
+        //private Common.Block block;        
         private boolean twoSigs;
         
-        private final Lock inputLock = new ReentrantLock();
-        private final Condition notEmptyInput = inputLock.newCondition();
-
         /*SignerThread(Common.Block block) {
 
             this.block = block;
             
         }*/
         
-        SignerThread(LinkedBlockingQueue<SignerThread>  output, boolean twoSigs) throws InterruptedException {
+        SignerThread(boolean twoSigs) throws InterruptedException {
 
-            this.input = new LinkedBlockingQueue<>();
-            this.output = output;
             this.twoSigs = twoSigs;
-            //LinkedList<Common.Block> l = new LinkedList<>();
-            //l.add(firstBlock);
-            //input(l);
         }
 
-        public void input(Collection<Common.Block> blocks) throws InterruptedException {
-            
-            inputLock.lock();
-            
-            input.addAll(blocks);
-            
-            notEmptyInput.signalAll();
-            inputLock.unlock();
-            
-        }
         private byte[] encodeBlockHeaderASN1(Common.BlockHeader header) throws IOException {
 
             // encode the header in ASN1 format
@@ -389,22 +372,29 @@ public class TestSignatures {
         @Override
         public void run() {
 
+            Context context = ZMQ.context(1);
+            Socket worker = context.socket(ZMQ.DEALER);
+            
+            String identity = String.format("%04X-%04X", rand.nextInt(), rand.nextInt());
+            
+            worker.setIdentity(identity.getBytes());
+            
+            //worker.connect("tcp://localhost:5671");
+            worker.connect("ipc:///tmp/pipeline");
+            
             while (true) {
                 try {
                     
-                    ArrayList<Common.Block> blocks = new ArrayList<>();
+                   worker.send("", ZMQ.SNDMORE);
+                   worker.send("Hi Boss");
+                   
+                   byte[] bytes = worker.recv(0); //delimeter
+                                      
 
-                    inputLock.lock();
-                    if(input.isEmpty()) {
-                        notEmptyInput.await();
-                    }
-                    input.drainTo(blocks);
-                    inputLock.unlock();
-                    
-                    for (Common.Block block : blocks) {
-                        
-                        
-
+                   bytes = worker.recv(0);
+                                      
+                   Common.Block block = Common.Block.parseFrom(bytes);
+                   
                         //create nonce
                         byte[] nonces = new byte[rand.nextInt(10)];
                         rand.nextBytes(nonces);
@@ -422,11 +412,9 @@ public class TestSignatures {
                         }
 
                         
-                    }
                     
-                    output.put(this);
 
-                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException ex) {
+                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
                     ex.printStackTrace();
                 }
             }
