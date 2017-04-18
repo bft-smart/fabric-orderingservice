@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -72,19 +73,20 @@ public class TestSignatures {
     private static int interval = 100000;
     private static int countSigs = 0;
     
-    public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException {
+    public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
         
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
         //TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[0]));
        
-        TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
+        /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
-        });
-        //TestSignatures.executor = Executors.newWorkStealingPool(16);
+        });*/
+        TestSignatures.executor = Executors.newWorkStealingPool(16);
+        
         TestSignatures.privKey = getPemPrivateKey(args[0]);
         parseCertificate(args[1]);
         TestSignatures.ident = getSerializedIdentity();
@@ -126,14 +128,19 @@ public class TestSignatures {
         
         System.out.println("Generating signatures with a pool of " + NUM_BLOCKS + " blocks... ");
         
+        LinkedBlockingQueue<Common.Block> queue = new LinkedBlockingQueue<>();
+        for (int i = 0 ; i < 16; i++) {
+
+            TestSignatures.executor.execute(new SignerThread(queue));
+            
+        }
+        
         while (true) {
             
-            if (multiThread) {
-                TestSignatures.executor.execute(new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)]));
-        }
-            else {
-                (new SignerThread(blocks[rand.nextInt(NUM_BLOCKS)])).run();
-            }
+            //if (multiThread) {
+                queue.put(blocks[rand.nextInt(NUM_BLOCKS)]);
+            //}
+           
         }
         
         
@@ -240,14 +247,21 @@ public class TestSignatures {
 
     private static class SignerThread implements Runnable {
 
-        private Common.Block block;
+        //private Common.Block block;
         
         MessageDigest digestEngine;
         Signature signEngine;
+        LinkedBlockingQueue<Common.Block>  queue;
 
-        SignerThread(Common.Block block) {
+        /*SignerThread(Common.Block block) {
 
             this.block = block;
+            
+        }*/
+        
+        SignerThread(LinkedBlockingQueue<Common.Block>  queue) {
+
+            this.queue = queue;
             
         }
 
@@ -310,41 +324,47 @@ public class TestSignatures {
         @Override
         public void run() {
 
-            try {
-                
-                if (sigsMeasurementStartTime == -1) {
-                    sigsMeasurementStartTime = System.currentTimeMillis();
-                }
-                
-                //create nonce
-                byte[] nonces = new byte[rand.nextInt(10)];
-                rand.nextBytes(nonces);
-                
-                //create signatures
-                Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, this.block.getHeader());
-                
-                
-                if (TestSignatures.twoSigs) {
-                
-                    byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                    Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, this.block.getHeader());
+            while (true) {
+                try {
 
-
-                }
-
-                countSigs++;
-
-                if (countSigs % interval == 0) {
-
-                    float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                    System.out.println("Throughput = " + tp + " sigs/sec");
-                    sigsMeasurementStartTime = System.currentTimeMillis();
-
-                }
+                    Common.Block block = queue.take();
                     
-                    
-            } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
-                Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
+                    if (sigsMeasurementStartTime == -1) {
+                        sigsMeasurementStartTime = System.currentTimeMillis();
+                    }
+
+                    //create nonce
+                    byte[] nonces = new byte[rand.nextInt(10)];
+                    rand.nextBytes(nonces);
+
+                    //create signatures
+                    Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), nonces, null, block.getHeader());
+
+
+                    if (TestSignatures.twoSigs) {
+
+                        byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
+                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), nonces, dummyConf, block.getHeader());
+
+
+                    }
+
+                    countSigs++;
+
+                    if (countSigs % interval == 0) {
+
+                        float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
+                        System.out.println("Throughput = " + tp + " sigs/sec");
+                        sigsMeasurementStartTime = System.currentTimeMillis();
+
+                    }
+
+
+                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
+                    Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(TestSignatures.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 
