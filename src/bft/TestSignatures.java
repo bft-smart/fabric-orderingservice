@@ -182,14 +182,6 @@ public class TestSignatures {
             //if (multiThread) {
             SignerThread s = queue.take();
             
-            LinkedList<Common.Block> l = new LinkedList<>();
-            
-            for (int i = 0; i < sigBatch; i++)
-                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
-            
-            s.input(l);
-            //}
-            
             countSigs += sigBatch;
 
             if (countSigs % interval == 0) {
@@ -199,7 +191,15 @@ public class TestSignatures {
                 sigsMeasurementStartTime = System.currentTimeMillis();
 
             }
-           
+            
+            LinkedList<Common.Block> l = new LinkedList<>();
+            
+            for (int i = 0; i < sigBatch; i++)
+                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
+            
+            s.input(l);
+            //}
+            
         }
         
         
