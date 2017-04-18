@@ -165,13 +165,13 @@ public class TestSignatures {
             
             countSigs += Integer.parseInt(args[4]);
 
-            //if (countSigs % interval == 0) {
+            if (countSigs % interval == 0) {
 
                 float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
                 System.out.println("Throughput = " + tp + " sigs/sec");
                 sigsMeasurementStartTime = System.currentTimeMillis();
 
-            //}
+            }
            
         }
         
