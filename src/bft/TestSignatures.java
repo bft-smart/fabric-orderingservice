@@ -139,6 +139,8 @@ public class TestSignatures {
         for (int i = 0; i < NUM_BATCHES; i++) {
             
             byte[] dummyDigest = new byte[rand.nextInt(1000)];
+            
+            rand.nextBytes(dummyDigest);
                     
             dummyDigest = TestSignatures.crypto.hash(dummyDigest);
             
