@@ -91,12 +91,12 @@ public class TestSignatures {
             return t;
         });*/
        
-        TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
+        /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
-        });
-        //TestSignatures.executor = Executors.newWorkStealingPool();
+        });*/
+        TestSignatures.executor = Executors.newWorkStealingPool(Integer.parseInt(args[3]));
         
         TestSignatures.privKey = getPemPrivateKey(args[0]);
         parseCertificate(args[1]);
