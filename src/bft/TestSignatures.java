@@ -85,7 +85,7 @@ public class TestSignatures {
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
         });*/
-        TestSignatures.executor = Executors.newWorkStealingPool(16);
+        TestSignatures.executor = Executors.newWorkStealingPool();
         
         TestSignatures.privKey = getPemPrivateKey(args[0]);
         parseCertificate(args[1]);
