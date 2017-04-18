@@ -104,7 +104,7 @@ public class TestSignatures {
         
         TestSignatures.twoSigs =  Boolean.parseBoolean(args[2]);
         
-        interval = 10*Integer.parseInt(args[4]);
+        interval = Integer.parseInt(args[4]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
