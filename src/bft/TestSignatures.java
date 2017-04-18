@@ -61,10 +61,7 @@ import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 public class TestSignatures {
     
     private static CryptoPrimitives crypto;
-    private static final int NUM_BATCHES = 200;
-    private static final int BATCH_SIZE = 10;
-    private static final int ENV_SIZE = 1024;
-    private static final int NUM_BLOCKS = 100;
+    private static final int NUM_BATCHES = 1000;
     
     private static final String Mspid = "DEFAULT";
 
@@ -85,7 +82,17 @@ public class TestSignatures {
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
-        /*TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[3]), (Runnable r) -> {
+        
+        String privKey = args[0];
+        String cert = args[1];
+        
+        int batchSize = Integer.parseInt(args[2]);
+        int envSize =Integer.parseInt(args[3]);
+        TestSignatures.twoSigs =  Boolean.parseBoolean(args[4]);
+        int parallelism = Integer.parseInt(args[5]);
+        int sigBatch = Integer.parseInt(args[6]);
+
+        /*TestSignatures.executor = Executors.newFixedThreadPool(parallelism, (Runnable r) -> {
             Thread t = new Thread(r);
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
@@ -96,24 +103,22 @@ public class TestSignatures {
             t.setPriority(Thread.MAX_PRIORITY);
             return t;
         });*/
-        TestSignatures.executor = Executors.newWorkStealingPool(Integer.parseInt(args[3]));
+        TestSignatures.executor = Executors.newWorkStealingPool(parallelism);
         
-        TestSignatures.privKey = getPemPrivateKey(args[0]);
-        parseCertificate(args[1]);
+        TestSignatures.privKey = getPemPrivateKey(privKey);
+        parseCertificate(cert);
         TestSignatures.ident = getSerializedIdentity();
-        
-        TestSignatures.twoSigs =  Boolean.parseBoolean(args[2]);
-        
-        interval = 100 * Integer.parseInt(args[4]);
+                
+        interval = 100 * sigBatch;
         
         //Generate pool of batches
-        System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
-        byte[][][] batches = new byte[NUM_BATCHES][BATCH_SIZE][];
+        System.out.print("Generating " + NUM_BATCHES + " batches with " + batchSize + " envelopes each... ");
+        byte[][][] batches = new byte[NUM_BATCHES][batchSize][];
         for (int i = 0; i < NUM_BATCHES; i++) {
             
-            for (int j = 0; j < BATCH_SIZE; j++) {
+            for (int j = 0; j < batchSize; j++) {
                 
-                batches[i][j] = new byte[ENV_SIZE];
+                batches[i][j] = new byte[envSize];
                 
                 rand.nextBytes(batches[i][j]);
                 
@@ -123,10 +128,10 @@ public class TestSignatures {
         
         System.out.println(" done!");
         
-        System.out.print("Generating batch pool of " + NUM_BLOCKS + " blocks... ");
+        System.out.print("Generating batch pool of " + NUM_BATCHES + " blocks... ");
         
-        Common.Block[] blocks = new Common.Block[NUM_BLOCKS];
-        for (int i = 0; i < NUM_BLOCKS; i++) {
+        Common.Block[] blocks = new Common.Block[NUM_BATCHES];
+        for (int i = 0; i < NUM_BATCHES; i++) {
             
             byte[] dummyDigest = new byte[rand.nextInt(1000)];
                     
@@ -138,18 +143,27 @@ public class TestSignatures {
         
         System.out.println(" done!");
         
-        System.out.println("Generating signatures with a pool of " + NUM_BLOCKS + " blocks... ");
+        System.out.println("Generating signatures with a pool of " + NUM_BATCHES + " blocks... ");
         
         LinkedBlockingQueue<SignerThread> queue = new LinkedBlockingQueue<>();
         
-        for (int i = 0 ; i < Integer.parseInt(args[3]); i++) {
-
-            TestSignatures.executor.execute(new SignerThread(queue, blocks[rand.nextInt(NUM_BLOCKS)]));
-            
-        }
-        
         sigsMeasurementStartTime = System.currentTimeMillis();
-        
+
+        for (int i = 0 ; i < parallelism; i++) {
+
+            SignerThread s = new SignerThread(queue);
+                        
+            LinkedList<Common.Block> l = new LinkedList<>();
+            
+            for (int j = 0; j < sigBatch; j++)
+                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
+            
+            s.input(l);
+            
+            TestSignatures.executor.execute(s);
+
+        }
+                
         while (true) {
             
             //if (multiThread) {
@@ -157,13 +171,13 @@ public class TestSignatures {
             
             LinkedList<Common.Block> l = new LinkedList<>();
             
-            for (int i = 0; i < Integer.parseInt(args[4]); i++)
-                l.add(blocks[rand.nextInt(NUM_BLOCKS)]);
+            for (int i = 0; i < sigBatch; i++)
+                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
             
             s.input(l);
             //}
             
-            countSigs += Integer.parseInt(args[4]);
+            countSigs += sigBatch;
 
             if (countSigs % interval == 0) {
 
@@ -295,13 +309,13 @@ public class TestSignatures {
             
         }*/
         
-        SignerThread(LinkedBlockingQueue<SignerThread>  output, Common.Block firstBlock) throws InterruptedException {
+        SignerThread(LinkedBlockingQueue<SignerThread>  output) throws InterruptedException {
 
             this.input = new LinkedBlockingQueue<>();
             this.output = output;
-            LinkedList<Common.Block> l = new LinkedList<>();
-            l.add(firstBlock);
-            input(l);
+            //LinkedList<Common.Block> l = new LinkedList<>();
+            //l.add(firstBlock);
+            //input(l);
         }
 
         public void input(Collection<Common.Block> blocks) throws InterruptedException {
