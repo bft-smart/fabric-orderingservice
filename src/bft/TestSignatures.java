@@ -78,7 +78,11 @@ public class TestSignatures {
         TestSignatures.crypto = new CryptoPrimitives();
         TestSignatures.crypto.init();
         TestSignatures.rand = new Random(System.nanoTime());
-        TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[4]));
+        TestSignatures.executor = Executors.newFixedThreadPool(Integer.parseInt(args[3]), (Runnable r) -> {
+            Thread t = new Thread(r);
+            t.setPriority(Thread.MAX_PRIORITY);
+            return t;
+        });
        
         /*TestSignatures.executor = Executors.newCachedThreadPool((Runnable r) -> {
             Thread t = new Thread(r);
@@ -91,8 +95,7 @@ public class TestSignatures {
         parseCertificate(args[1]);
         TestSignatures.ident = getSerializedIdentity();
         
-        boolean multiThread = Boolean.parseBoolean(args[2]);
-        TestSignatures.twoSigs =  Boolean.parseBoolean(args[3]);
+        TestSignatures.twoSigs =  Boolean.parseBoolean(args[2]);
         
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + BATCH_SIZE + " envelopes each... ");
@@ -130,7 +133,7 @@ public class TestSignatures {
         
         LinkedBlockingQueue<SignerThread> queue = new LinkedBlockingQueue<>();
         
-        for (int i = 0 ; i < Integer.parseInt(args[4]); i++) {
+        for (int i = 0 ; i < Integer.parseInt(args[3]); i++) {
 
             TestSignatures.executor.execute(new SignerThread(queue, blocks[rand.nextInt(NUM_BLOCKS)]));
             
@@ -139,7 +142,9 @@ public class TestSignatures {
         while (true) {
             
             //if (multiThread) {
-            queue.take().input(blocks[rand.nextInt(NUM_BLOCKS)]);
+            SignerThread s = queue.take();
+            for (int i = 0; i < Integer.parseInt(args[4]); i++)
+                s.input(blocks[rand.nextInt(NUM_BLOCKS)]);
             //}
            
         }
