@@ -187,9 +187,9 @@ public class BFTNode extends DefaultRecoverable {
             return new byte[0];
         }
         
-        if (msgCtx.getSequence() == 0 && blockCutter == null && orderers.contains(msgCtx.getSender())) {
+        if (msgCtx.getSequence() == 0 && orderers.contains(msgCtx.getSender())) {
             
-            blockCutter = new BlockCutter(command);
+            if (blockCutter == null) blockCutter = new BlockCutter(command);
             
             return new byte[0];
 
