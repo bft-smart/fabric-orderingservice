@@ -17,16 +17,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.SignatureException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedList;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OutputStream;
 import org.bouncycastle.asn1.DEROctetString;
@@ -105,7 +98,7 @@ public class TestSignaturesZMQ {
         parseCertificate(cert);
         TestSignaturesZMQ.ident = getSerializedIdentity();
                 
-        interval = 1000;
+        interval = 100000;
         
         
         //ZMQ
@@ -190,7 +183,11 @@ public class TestSignaturesZMQ {
 
             broker.sendMore("");            
             
-            broker.send(blocks[rand.nextInt(NUM_BATCHES)].toByteArray(), 0);
+            
+            Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+            block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+                
+            broker.send(block.build().toByteArray(), 0);
 
             //}
             

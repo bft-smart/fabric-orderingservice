@@ -182,8 +182,14 @@ public class TestSignatures {
             
             LinkedList<Common.Block> l = new LinkedList<>();
             
-            for (int i = 0; i < sigBatch; i++)
-                l.add(blocks[rand.nextInt(NUM_BATCHES)]);
+            for (int i = 0; i < sigBatch; i++) {
+                
+                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+                
+                l.add(block.build());
+            
+            }
             
             s.input(l);
             //}
