@@ -11,13 +11,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.charset.Charset;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.SignatureException;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -55,6 +59,7 @@ public class TestSignaturesZMQ {
     private static byte[] serializedCert = null;
     private static Identities.SerializedIdentity ident;
     private static Context context;
+    private static ConcurrentHashMap<String,Set<Common.Block>> toSign;
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
@@ -64,8 +69,8 @@ public class TestSignaturesZMQ {
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
         
         
-        if(args.length < 6) {
-            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> ");
+        if(args.length < 7) {
+            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> <sig batch>");
             System.exit(-1);
         }  
         
@@ -80,6 +85,7 @@ public class TestSignaturesZMQ {
         int envSize =Integer.parseInt(args[3]);
         boolean twoSigs =  Boolean.parseBoolean(args[4]);
         int parallelism = Integer.parseInt(args[5]);
+        int sigBatch = Integer.parseInt(args[6]);
 
         /*TestSignatures.executor = Executors.newFixedThreadPool(parallelism, (Runnable r) -> {
             Thread t = new Thread(r);
@@ -99,6 +105,7 @@ public class TestSignaturesZMQ {
         TestSignaturesZMQ.ident = getSerializedIdentity();
                 
         interval = 100000;
+        toSign = new ConcurrentHashMap<>();
         
         
         //ZMQ
@@ -160,9 +167,7 @@ public class TestSignaturesZMQ {
            byte[] identity = broker.recv();
             //if (multiThread) {
            
-
-            
-            countSigs++;
+            countSigs += sigBatch;
 
             if (countSigs % interval == 0) {
 
@@ -183,11 +188,21 @@ public class TestSignaturesZMQ {
 
             broker.sendMore("");            
             
-            
-            Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
-            block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+            Set<Common.Block> s = new HashSet<>();
+            for (int i = 0; i < sigBatch; i++) {
                 
-            broker.send(block.build().toByteArray(), 0);
+                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+            
+                s.add(block.build());
+                
+            }
+            
+            String key = String.format("%04X-%04X", rand.nextLong(), rand.nextLong());
+            
+            toSign.put(key, s);
+                
+            broker.send(key, 0);
 
             //}
             
@@ -385,13 +400,14 @@ public class TestSignaturesZMQ {
                    worker.send("", ZMQ.SNDMORE);
                    worker.send("Hi Boss");
                    
-                   byte[] bytes = worker.recv(0); //delimeter
+                   worker.recv(0); //delimeter
                                       
 
-                   bytes = worker.recv(0);
-                                      
-                   Common.Block block = Common.Block.parseFrom(bytes);
-                   
+                   String key =  worker.recvStr(0, Charset.defaultCharset());
+                     
+                   Set<Common.Block> set = toSign.get(key);
+                   //Common.Block block = Common.Block.parseFrom(bytes);
+                   for (Common.Block block : set) {
                         //create nonce
                         byte[] nonces = new byte[rand.nextInt(10)];
                         rand.nextBytes(nonces);
@@ -408,7 +424,7 @@ public class TestSignaturesZMQ {
 
                         }
 
-                        
+                   }    
                     
 
                 } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException ex) {
