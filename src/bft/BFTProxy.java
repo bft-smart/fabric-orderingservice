@@ -15,7 +15,9 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -252,22 +254,27 @@ public class BFTProxy {
 
                 //logger.info("Received delimeter of " + bytes.length + " bytes at connection #" + this.id);
                 
-                bytes = worker.recv(0);
+                Set<byte[]> set = new HashSet<>();
+                while ((bytes = worker.recv(0)).length > 1 && bytes[0] != 1) {
                 
-                logger.debug("Received envelope of " + bytes.length + " bytes at connection #" + this.id);
+                    countEnvelopes++;
+                    
+                    logger.debug("Received envelope of " + bytes.length + " bytes at connection #" + this.id);
+
+                    set.add(bytes);
+                }
                 
                 resetTimer();
 
                 //CommonProtos.Envelope env = CommonProtos.Envelope.parseFrom(bytes);
                 //logger.debug("Envelope Payload" + Arrays.toString(env.getPayload().toByteArray()));
 
-                this.out.invokeAsynchRequest(bytes, null, TOMMessageType.ORDERED_REQUEST);
+                for (byte[] b : set)
+                    this.out.invokeAsynchRequest(b, null, TOMMessageType.ORDERED_REQUEST);
 
                 if (envelopeMeasurementStartTime == -1) {
                     envelopeMeasurementStartTime = System.currentTimeMillis();
                 }
-
-                countEnvelopes++;
 
                 if (countEnvelopes % interval == 0) {
 
