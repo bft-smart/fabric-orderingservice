@@ -61,6 +61,7 @@ public class TestSignaturesZMQ {
     private static PrivateKey privKey = null;
     private static byte[] serializedCert = null;
     private static Identities.SerializedIdentity ident;
+    private static Context context;
     
     //measurements
     private static long sigsMeasurementStartTime = -1;
@@ -108,10 +109,10 @@ public class TestSignaturesZMQ {
         
         
         //ZMQ
-        Context context = ZMQ.context(1);
+        context = ZMQ.context(1);
         Socket broker = context.socket(ZMQ.ROUTER);
         //broker.bind("tcp://*:5671");
-        broker.bind("ipc:///tmp/pipeline");
+        broker.bind("inproc://pipeline");
                     
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + batchSize + " envelopes each... ");
@@ -372,7 +373,6 @@ public class TestSignaturesZMQ {
         @Override
         public void run() {
 
-            Context context = ZMQ.context(1);
             Socket worker = context.socket(ZMQ.DEALER);
             
             String identity = String.format("%04X-%04X", rand.nextInt(), rand.nextInt());
@@ -380,7 +380,7 @@ public class TestSignaturesZMQ {
             worker.setIdentity(identity.getBytes());
             
             //worker.connect("tcp://localhost:5671");
-            worker.connect("ipc:///tmp/pipeline");
+            worker.connect("inproc://pipeline");
             
             while (true) {
                 try {
