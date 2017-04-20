@@ -130,7 +130,7 @@ public class BFTProxy {
             
             timer.schedule(new BatchTimeout(), (BatchTimeout / 1000000));
             
-            executor = Executors.newFixedThreadPool(poolSize);
+            executor = Executors.newWorkStealingPool(poolSize);
 
             //ZMQ
             context = ZMQ.context(1);
