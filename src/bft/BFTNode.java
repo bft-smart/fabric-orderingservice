@@ -21,11 +21,9 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
-import java.security.Signature;
 import java.security.SignatureException;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -80,7 +78,7 @@ public class BFTNode extends DefaultRecoverable {
     private ExecutorService executor = null;
     
     //measurements
-    private int interval = 10000;
+    private int interval = 100000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
     private long sigsMeasurementStartTime = -1;
