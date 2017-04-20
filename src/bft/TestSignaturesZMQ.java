@@ -405,7 +405,7 @@ public class TestSignaturesZMQ {
 
                    String key =  worker.recvStr(0, Charset.defaultCharset());
                      
-                   Set<Common.Block> set = toSign.get(key);
+                   Set<Common.Block> set = toSign.remove(key);
                    //Common.Block block = Common.Block.parseFrom(bytes);
                    for (Common.Block block : set) {
                         //create nonce
