@@ -256,6 +256,11 @@ public class BFTProxy {
                 
                 Set<byte[]> set = new HashSet<>();
                 while ((bytes = worker.recv(0)).length > 1 && bytes[0] != 1) {
+                    
+                    if (envelopeMeasurementStartTime == -1) {
+                        envelopeMeasurementStartTime = System.currentTimeMillis();
+                    }
+                    
                 
                     countEnvelopes++;
                     
@@ -264,6 +269,15 @@ public class BFTProxy {
                     set.add(bytes);
                 }
                 
+                
+
+                if (countEnvelopes % interval == 0) {
+
+                    float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
+                    logger.info("Throughput = " + tp + " envelopes/sec");
+                    envelopeMeasurementStartTime = System.currentTimeMillis();
+
+                }                
                 resetTimer();
 
                 //CommonProtos.Envelope env = CommonProtos.Envelope.parseFrom(bytes);
@@ -272,17 +286,7 @@ public class BFTProxy {
                 for (byte[] b : set)
                     this.out.invokeAsynchRequest(b, null, TOMMessageType.ORDERED_REQUEST);
 
-                if (envelopeMeasurementStartTime == -1) {
-                    envelopeMeasurementStartTime = System.currentTimeMillis();
-                }
-
-                if (countEnvelopes % interval == 0) {
-
-                    float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
-                    logger.info("Throughput = " + tp + " envelopes/sec");
-                    envelopeMeasurementStartTime = System.currentTimeMillis();
-
-                }
+                set.clear(); // for faster garbage collection
         
                 //byte[] reply = proxy.invokeOrdered(bytes);
 
