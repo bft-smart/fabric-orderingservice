@@ -7,11 +7,6 @@ package bft;
 
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessageType;
-import com.etsy.net.JUDS;
-import com.etsy.net.UnixDomainSocket;
-import com.etsy.net.UnixDomainSocketServer;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -20,6 +15,7 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -30,6 +26,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.hyperledger.fabric.protos.common.Common;
+import org.zeromq.ZMQ;
+import org.zeromq.ZMQ.Context;
 
 /**
  *
@@ -40,15 +38,15 @@ public class BFTProxy {
     /**
      * @param args the command line arguments
      */
-    private static UnixDomainSocketServer recvServer = null;
+    private static ServerSocket recvServer = null;
     private static ServerSocket sendServer = null;
     private static DataInputStream is;
     private static DataOutputStream os;
-    private static UnixDomainSocket recvSocket = null;
+    private static Socket recvSocket = null;
     private static Socket sendSocket = null;
     private static ReceiverThread[] recvPool = null;
     private static ExecutorService executor = null;
-
+    private static Context context;
     private static long PreferredMaxBytes = 0;
     private static long MaxMessageCount = 0;
     private static long BatchTimeout = 0;
@@ -87,9 +85,9 @@ public class BFTProxy {
         int sendPort = Integer.parseInt(args[2]);
         
         proxy.getCommunicationSystem().setReplyReceiver(listener);
-
+        
         try {
-            recvServer = new  UnixDomainSocketServer("/tmp/bft.sock", JUDS.SOCK_STREAM, 10);
+            recvServer = new ServerSocket(recvPort);
             sendServer = new ServerSocket(sendPort);
         } catch (IOException e) {
             e.printStackTrace();
@@ -134,14 +132,20 @@ public class BFTProxy {
             
             executor = Executors.newFixedThreadPool(poolSize);
 
+            //ZMQ
+            context = ZMQ.context(1);
+            
+            Random rand = new Random(System.nanoTime());
+
             for (int i = 0; i < poolSize; i++) {
                 
-                UnixDomainSocket socket = recvServer.accept();
+                String identity = String.format("%04X-%04X", rand.nextInt(), rand.nextInt());
                 
-                //socket.setTcpNoDelay(true);
-                //socket.setReceiveBufferSize(64 * 1024);
-                
-                executor.execute(new ReceiverThread(socket, i + initID + 1));
+                ZMQ.Socket worker = context.socket(ZMQ.DEALER);
+                worker.setIdentity(identity.getBytes());
+                worker.connect("ipc:///tmp/bft.sock");
+                                                
+                executor.execute(new ReceiverThread(worker, i + initID + 1));
                 
             }
             
@@ -224,15 +228,13 @@ public class BFTProxy {
     private static class ReceiverThread extends Thread {
         
         private int id;
-        private UnixDomainSocket recv;
-        private DataInputStream input;
+        private ZMQ.Socket worker;
         private AsynchServiceProxy out;
         
-        public ReceiverThread(UnixDomainSocket recv, int id) throws IOException {
+        public ReceiverThread(ZMQ.Socket worker, int id) throws IOException {
                         
             this.id = id;
-            this.recv = recv;
-            this.input = new DataInputStream(this.recv.getInputStream());
+            this.worker = worker;
             this.out = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
         }
@@ -243,14 +245,16 @@ public class BFTProxy {
             while (true) {
                 
 
-                try {
-                    bytes = readBytes(this.input);
-                } catch (IOException ex) {
-                    Logger.getLogger(BFTProxy.class.getName()).log(Level.SEVERE, null, ex);
-                    continue;
-                }
+                worker.send("", ZMQ.SNDMORE);
+                worker.send("Hi Boss");
+                   
+                //bytes = worker.recv(0); //delimeter
+
+                //logger.info("Received delimeter of " + bytes.length + " bytes at connection #" + this.id);
                 
-                //logger.debug("Received envelope at connection #" + this.id);
+                bytes = worker.recv(0);
+                
+                logger.debug("Received envelope of " + bytes.length + " bytes at connection #" + this.id);
                 
                 resetTimer();
 
