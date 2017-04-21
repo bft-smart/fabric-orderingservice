@@ -40,7 +40,7 @@ public class TestNodes {
         
         AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                //Do nothing upon a reply nothing
+                proxy.cleanAsynchRequest(tomm.getSequence());
             });
         
         
@@ -131,7 +131,7 @@ public class TestNodes {
             this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
             this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                //Do nothing upon a reply nothing
+                this.proxy.cleanAsynchRequest(tomm.getSequence());
             });
 
         }
