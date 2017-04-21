@@ -5,9 +5,7 @@
  */
 package bft;
 
-import bftsmart.communication.client.ReplyReceiver;
 import bftsmart.tom.AsynchServiceProxy;
-import bftsmart.tom.ServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import com.google.protobuf.ByteString;
@@ -72,7 +70,7 @@ public class TestNodes {
         
         Common.Envelope env = builder.build();
         
-        ExecutorService executor = Executors.newWorkStealingPool(clients); 
+        ExecutorService executor = Executors.newCachedThreadPool();
         
 
         for (int i = 0; i < clients; i++) {
