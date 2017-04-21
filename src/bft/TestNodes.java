@@ -40,12 +40,14 @@ public class TestNodes {
         
         AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                proxy.cleanAsynchRequest(tomm.getSequence());
+                // do nothing
             });
         
         
-        proxy.invokeAsynchRequest(serializeBatchParams(), null, TOMMessageType.ORDERED_REQUEST);
-        proxy.invokeAsynchRequest(createGenesisBlock().toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
+        int reqId = proxy.invokeAsynchRequest(serializeBatchParams(), null, TOMMessageType.ORDERED_REQUEST);
+        proxy.cleanAsynchRequest(reqId);
+        reqId = proxy.invokeAsynchRequest(createGenesisBlock().toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
+        proxy.cleanAsynchRequest(reqId);
             
         Random rand = new Random(System.nanoTime());
         byte[] payload = new byte[Integer.parseInt(args[2])];
@@ -131,7 +133,7 @@ public class TestNodes {
             this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
             this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                this.proxy.cleanAsynchRequest(tomm.getSequence());
+                //do nothing
             });
 
         }
@@ -142,7 +144,8 @@ public class TestNodes {
 
                 while (true) {
                 
-                    proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
+                    int reqId = proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
+                    proxy.cleanAsynchRequest(reqId);
                 }
             }
         
