@@ -283,9 +283,10 @@ public class BFTProxy {
                 //CommonProtos.Envelope env = CommonProtos.Envelope.parseFrom(bytes);
                 //logger.debug("Envelope Payload" + Arrays.toString(env.getPayload().toByteArray()));
 
-                for (byte[] b : set)
-                    this.out.invokeAsynchRequest(b, null, TOMMessageType.ORDERED_REQUEST);
-
+                for (byte[] b : set) {
+                    int reqId = this.out.invokeAsynchRequest(b, null, TOMMessageType.ORDERED_REQUEST);
+                    this.out.cleanAsynchRequest(reqId);
+                }
                 set.clear(); // for faster garbage collection
         
                 //byte[] reply = proxy.invokeOrdered(bytes);
@@ -336,7 +337,8 @@ public class BFTProxy {
         @Override
         public void run() {
             
-            proxy.invokeAsynchRequest(new byte[0], null, TOMMessageType.ORDERED_REQUEST);
+           int reqId =  proxy.invokeAsynchRequest(new byte[0], null, TOMMessageType.ORDERED_REQUEST);
+            proxy.cleanAsynchRequest(reqId);
             
             timer = new Timer();
             timer.schedule(new BatchTimeout(), (BatchTimeout / 1000000));
