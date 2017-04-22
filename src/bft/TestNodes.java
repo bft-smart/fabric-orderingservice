@@ -149,11 +149,11 @@ public class TestNodes {
                     int reqId = proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
                     proxy.cleanAsynchRequest(reqId);
                     
-                    try {
+                    /*try {
                         Thread.sleep(1);
                     } catch (InterruptedException ex) {
                         Logger.getLogger(TestNodes.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    }*/
                 }
             }
         
