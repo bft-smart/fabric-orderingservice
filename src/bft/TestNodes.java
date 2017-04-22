@@ -18,6 +18,8 @@ import java.security.NoSuchProviderException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.hyperledger.fabric.protos.common.Common;
 
 /**
@@ -146,6 +148,12 @@ public class TestNodes {
                 
                     int reqId = proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
                     proxy.cleanAsynchRequest(reqId);
+                    
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(TestNodes.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
             }
         
