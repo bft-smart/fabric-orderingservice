@@ -25,9 +25,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.SignatureException;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
@@ -74,8 +76,9 @@ public class BFTNode extends DefaultRecoverable {
     
     //signature thread stuff
     private int paralellism;
-    LinkedBlockingQueue<SignerSenderThread> queue;
+    private LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
+    private BlockThread blockThread;
     
     //measurements
     private int interval = 100000;
@@ -116,6 +119,9 @@ public class BFTNode extends DefaultRecoverable {
             
             this.executor.execute(new SignerSenderThread(this.queue));
         }
+        
+        this.blockThread = new BlockThread();
+        this.blockThread.start();
 
         this.orderers = new TreeSet<>();
         for (int o : orderers) {
@@ -171,7 +177,7 @@ public class BFTNode extends DefaultRecoverable {
     private byte[] executeSingle(byte[] command, MessageContext msgCtx)  {
                 
         
-        if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
+        /*if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
             
             byte[][] batch = blockCutter.cut();
 
@@ -183,7 +189,7 @@ public class BFTNode extends DefaultRecoverable {
             logger.debug("Purging blockcutter");
 
             return new byte[0];
-        }
+        }*/
         
         if (msgCtx.getSequence() == 0 && orderers.contains(msgCtx.getSender())) {
             
@@ -209,9 +215,9 @@ public class BFTNode extends DefaultRecoverable {
                 logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeader)));
                 
             } catch (InvalidProtocolBufferException ex) {
-                Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
+                ex.printStackTrace();
             } catch (IOException ex) {
-                Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
+                ex.printStackTrace();
             }
             
             return new byte[0];
@@ -221,7 +227,6 @@ public class BFTNode extends DefaultRecoverable {
         
         countEnvelopes++;
                    
-        
         if(countEnvelopes % interval == 0) {
             
             float tp = (float)(interval*1000/(float)(System.currentTimeMillis()-envelopeMeasurementStartTime));
@@ -233,18 +238,24 @@ public class BFTNode extends DefaultRecoverable {
         logger.debug("Envelopes received: " + countEnvelopes);
         
 
-        List<byte[][]> batches = null;
+        try {
+            if (blockCutter != null) blockThread.input(command, msgCtx);
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        }
+        
+        /*List<byte[][]> batches = null;
         try {
             batches = blockCutter.ordered(command);
         } catch (IOException ex) {
             ex.printStackTrace();
         }
-        
+                
         if (batches == null) return new byte[0];
         
         for (int i = 0; i < batches.size(); i++) {
             assembleAndSend(batches.get(i), msgCtx);
-        }
+        }*/
         return new byte[0];
         
     }
@@ -564,13 +575,88 @@ public class BFTNode extends DefaultRecoverable {
         return new byte[0];
     }
 
+    private class BlockThread extends Thread {
+        
+        private LinkedBlockingQueue<Entry<byte[],MessageContext>> envelopes;
+        
+        private final Lock envelopesLock;
+        private final Condition notEmptyQueue;
+        
+        BlockThread () {
+            
+            this.envelopes = new LinkedBlockingQueue<>();
+            
+            this.envelopesLock = new ReentrantLock();
+            this.notEmptyQueue = envelopesLock.newCondition();
+        }
+        
+        void input (byte[] envelope, MessageContext msgCtx) throws InterruptedException {
+            
+            this.envelopesLock.lock();
+            
+            this.envelopes.put(new SimpleEntry(envelope, msgCtx));
+            
+            this.notEmptyQueue.signalAll();
+            this.envelopesLock.unlock();
+        }
+        
+        public void run() {
+            
+            while(true) {
+            
+                List<byte[][]> batches = null;
+                LinkedList<Entry<byte[],MessageContext>> queuedEnvs = new LinkedList();
+                try {
+
+                    this.envelopesLock.lock();
+                    if(this.envelopes.isEmpty()) {
+                        this.notEmptyQueue.await();
+                    }
+                    this.envelopes.drainTo(queuedEnvs);
+                    this.envelopesLock.unlock();
+                
+                    for (int i = 0; i < queuedEnvs.size(); i++) {
+                        
+                        if (queuedEnvs.get(i).getKey().length == 0 &&
+                                orderers.contains(queuedEnvs.get(i).getValue().getSender())) {
+            
+                            byte[][] batch = blockCutter.cut();
+
+                            if (batch.length > 0) {
+
+                                assembleAndSend(batch, queuedEnvs.get(i).getValue());
+                            }
+
+                            logger.debug("Purging blockcutter");
+
+                            continue;
+                        }
+                        
+                    
+                        batches = blockCutter.ordered(queuedEnvs.get(i).getKey());
+                        
+                        for (int j = 0; j < batches.size(); j++) {
+                            
+                            assembleAndSend(batches.get(j), queuedEnvs.get(i).getValue());
+                        }
+                    }
+
+                } catch (IOException | InterruptedException ex) {
+                    ex.printStackTrace();
+                }
+
+                
+            }
+        }
+    }
+    
     private class SignerSenderThread implements Runnable {
 
         private Common.Block block;
         private MessageContext msgContext;
         private int seq;
         
-        LinkedBlockingQueue<SignerSenderThread> queue;
+        private LinkedBlockingQueue<SignerSenderThread> queue;
         
         private final Lock inputLock;
         private final Condition notEmptyInput;
