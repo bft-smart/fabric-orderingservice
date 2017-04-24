@@ -29,7 +29,7 @@ public class TestNodes {
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 4) {
+        if(args.length < 5) {
             System.out.println("Use: java TestNodes <init ID> <num clients> <delay> <envelope payload size> <add signature?>");
             System.exit(-1);
         }      
