@@ -18,8 +18,6 @@ import java.security.NoSuchProviderException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.hyperledger.fabric.protos.common.Common;
 
 /**
@@ -32,13 +30,13 @@ public class TestNodes {
     public static void main(String[] args) throws Exception{
 
         if(args.length < 4) {
-            System.out.println("Use: java TestNodes <init ID> <num clients> <envelope payload size> <add signature?>");
+            System.out.println("Use: java TestNodes <init ID> <num clients> <delay> <envelope payload size> <add signature?>");
             System.exit(-1);
         }      
         
         int initID = Integer.parseInt(args[0]);
         int clients = Integer.parseInt(args[1]);
-        
+        int delay = Integer.parseInt(args[2]);
         
         AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
@@ -52,13 +50,13 @@ public class TestNodes {
         proxy.cleanAsynchRequest(reqId);
             
         Random rand = new Random(System.nanoTime());
-        byte[] payload = new byte[Integer.parseInt(args[2])];
+        byte[] payload = new byte[Integer.parseInt(args[3])];
         
         rand.nextBytes(payload);
         
         byte[] signature;
         
-        if (Boolean.parseBoolean(args[3])) {
+        if (Boolean.parseBoolean(args[4])) {
             
             signature = new byte[72];
             rand.nextBytes(signature);
@@ -79,7 +77,7 @@ public class TestNodes {
 
         for (int i = 0; i < clients; i++) {
         
-            executor.execute(new ProxyThread(i + initID + 1, env.toByteArray()));
+            executor.execute(new ProxyThread(i + initID + 1, env.toByteArray(), delay));
         
         }
     }
@@ -126,12 +124,14 @@ public class TestNodes {
         
         int id;
         byte[] env;
+        int delay;
         AsynchServiceProxy proxy;
 
         
-        public ProxyThread (int id, byte[] env) {
+        public ProxyThread (int id, byte[] env, int delay) {
             this.id = id;
             this.env = env;
+            this.delay = delay;
             this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
             this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
@@ -149,11 +149,11 @@ public class TestNodes {
                     int reqId = proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
                     proxy.cleanAsynchRequest(reqId);
                     
-                    /*try {
-                        Thread.sleep(1);
+                    try {
+                        if (this.delay > 0) Thread.sleep(this.delay);
                     } catch (InterruptedException ex) {
-                        Logger.getLogger(TestNodes.class.getName()).log(Level.SEVERE, null, ex);
-                    }*/
+                        ex.printStackTrace();
+                    }
                 }
             }
         
