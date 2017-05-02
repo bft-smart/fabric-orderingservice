@@ -31,7 +31,7 @@ public class BlockCutter {
     private int  pendingBatchSizeBytes = 0;
     
     private Log logger;
-
+    
     public BlockCutter(byte [] bytes) {
         
         logger = LogFactory.getLog(BlockCutter.class);

@@ -79,6 +79,9 @@ public class BFTNode extends DefaultRecoverable {
     private LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
     private BlockThread blockThread;
+    private final int SIG_LIMIT = 10000;
+    private int sigIndex = 0;
+    private SignerSenderThread currentSST = null;
     
     //measurements
     private int interval = 100000;
@@ -177,7 +180,7 @@ public class BFTNode extends DefaultRecoverable {
     private byte[] executeSingle(byte[] command, MessageContext msgCtx)  {
                 
         
-        /*if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
+        if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
             
             byte[][] batch = blockCutter.cut();
 
@@ -189,7 +192,7 @@ public class BFTNode extends DefaultRecoverable {
             logger.debug("Purging blockcutter");
 
             return new byte[0];
-        }*/
+        }
         
         if (msgCtx.getSequence() == 0 && orderers.contains(msgCtx.getSender())) {
             
@@ -238,13 +241,13 @@ public class BFTNode extends DefaultRecoverable {
         logger.debug("Envelopes received: " + countEnvelopes);
         
 
-        try {
+        /*try {
             if (blockCutter != null) blockThread.input(command, msgCtx);
         } catch (InterruptedException ex) {
             ex.printStackTrace();
-        }
+        }*/
         
-        /*List<byte[][]> batches = null;
+        List<byte[][]> batches = null;
         try {
             batches = blockCutter.ordered(command);
         } catch (IOException ex) {
@@ -255,7 +258,7 @@ public class BFTNode extends DefaultRecoverable {
         
         for (int i = 0; i < batches.size(); i++) {
             assembleAndSend(batches.get(i), msgCtx);
-        }*/
+        }
         return new byte[0];
         
     }
@@ -284,8 +287,18 @@ public class BFTNode extends DefaultRecoverable {
             this.lastBlockHeader = block.getHeader();
 
             //optimization to parellise signatures and sending
-            SignerSenderThread SSThread = this.queue.take(); // fetch the first SSThread that is idle
-            SSThread.input(block, msgCtx, this.sequence);
+            
+            if (sigIndex % SIG_LIMIT == 0) {
+            
+                if (currentSST != null) currentSST.input(null, null, -1);
+                
+                currentSST = this.queue.take(); // fetch the first SSThread that is idle
+            
+            } 
+
+            currentSST.input(block, msgCtx, this.sequence);
+            sigIndex++;
+
             //Runnable SSThread = new SignerSenderThread(block, msgCtx, this.sequence);
             //this.executor.execute(SSThread);
             
@@ -588,8 +601,8 @@ public class BFTNode extends DefaultRecoverable {
             
             this.envelopesLock = new ReentrantLock();
             this.notEmptyQueue = envelopesLock.newCondition();
-        }
-        
+                }
+                        
         void input (byte[] envelope, MessageContext msgCtx) throws InterruptedException {
             
             this.envelopesLock.lock();
@@ -614,7 +627,7 @@ public class BFTNode extends DefaultRecoverable {
                     }
                     this.envelopes.drainTo(queuedEnvs);
                     this.envelopesLock.unlock();
-                
+                    
                     for (int i = 0; i < queuedEnvs.size(); i++) {
                         
                         if (queuedEnvs.get(i).getKey().length == 0 &&
@@ -651,10 +664,8 @@ public class BFTNode extends DefaultRecoverable {
     }
     
     private class SignerSenderThread implements Runnable {
-
-        private Common.Block block;
-        private MessageContext msgContext;
-        private int seq;
+        
+        private LinkedBlockingQueue<BFTTuple>  input;
         
         private LinkedBlockingQueue<SignerSenderThread> queue;
         
@@ -665,19 +676,19 @@ public class BFTNode extends DefaultRecoverable {
             
             this.queue = queue;
             
+            this.input = new LinkedBlockingQueue<>();
+            
             this.inputLock = new ReentrantLock();
             this.notEmptyInput = inputLock.newCondition();
             
             this.queue.put(this);
         }
 
-        public void input(Common.Block block, MessageContext msgContext, int seq) {
+        public void input(Common.Block block, MessageContext msgContext, int seq) throws InterruptedException {
             
             this.inputLock.lock();
             
-            this.block = block;
-            this.msgContext = msgContext;
-            this.seq = seq;
+            this.input.put(new BFTTuple(block, msgContext, seq));
             
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
@@ -691,94 +702,95 @@ public class BFTNode extends DefaultRecoverable {
                 
                 try {
                     
+                    LinkedList<BFTTuple> list = new LinkedList<>();
+                    
                     this.inputLock.lock();
                     
-                    if(this.block == null || this.msgContext == null || this.seq == -1) {
+                    if(this.input.isEmpty()) {
                         this.notEmptyInput.await();
                         
                     }
+                    this.input.drainTo(list);
                     this.inputLock.unlock();
                     
+                   for (BFTTuple tuple : list) {
+                    
+                    
+                        if (tuple.sequence == -1) {
+                            this.queue.put(this);
+                            break;
+                        }
+                        
+                        if (sigsMeasurementStartTime == -1) {
+                            sigsMeasurementStartTime = System.currentTimeMillis();
+                        }
 
-                    if (sigsMeasurementStartTime == -1) {
-                        sigsMeasurementStartTime = System.currentTimeMillis();
-                    }
+                        //create signatures
+                        Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), null, tuple.block.getHeader());
 
-                    //create signatures
-                    Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), this.msgContext.getNonces(), null, this.block.getHeader());
+                        /*countSigs++;
+                        if (countSigs % interval == 0) {
 
+                            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
+                            logger.info("Throughput = " + tp + " sigs/sec");
+                            sigsMeasurementStartTime = System.currentTimeMillis();
 
-                    countSigs++;
+                        }*/
+
+                        byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
+                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), dummyConf, tuple.block.getHeader());
+
+                        countSigs++;
 
                     if (countSigs % interval == 0) {
 
                         float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                        logger.info("Throughput = " + tp + " sigs/sec");
-                        sigsMeasurementStartTime = System.currentTimeMillis();
-
-                    }
-
-                    byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                    Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), this.msgContext.getNonces(), dummyConf, this.block.getHeader());
-
-                    countSigs++;
-
-                    if (countSigs % interval == 0) {
-
-                        float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                        logger.info("Throughput = " + tp + " sigs/sec");
-                        sigsMeasurementStartTime = System.currentTimeMillis();
-
-                    }
-
-                    //serialize contents
-                    byte[][] contents = new byte[3][];
-                    contents[0] = this.block.toByteArray();
-                    contents[1] = blockSig.toByteArray();
-                    contents[2] = configSig.toByteArray();
-
-                    byte[] serialized = serializeContents(contents);
-
-
-                    // send contents to the orderers
-                    TOMMessage reply = null;
-                    reply = new TOMMessage(id,
-                            this.msgContext.getSession(),
-                            this.seq, //change sequence because the message is going to be received by all clients, not just the original sender
-                            this.msgContext.getOperationId(),
-                            serialized,
-                            replica.getReplicaContext().getCurrentView().getId(),
-                            this.msgContext.getType());
-
-                    if (reply == null) {
-                        return;
-                    }
-
-                    int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
-
-                    List<Integer> activeOrderers = new LinkedList<>();
-
-                    for (Integer c : clients) {
-                        if (orderers.contains(c)) {
-
-                            activeOrderers.add(c);
+                            logger.info("Throughput = " + tp + " sigs/sec");
+                            sigsMeasurementStartTime = System.currentTimeMillis();
 
                         }
-                    }
+
+                        //serialize contents
+                        byte[][] contents = new byte[3][];
+                        contents[0] = tuple.block.toByteArray();
+                        contents[1] = blockSig.toByteArray();
+                        contents[2] = configSig.toByteArray();
+
+                        byte[] serialized = serializeContents(contents);
 
 
-                    int[] array = new int[activeOrderers.size()];
-                    for (int i = 0; i < array.length; i++) {
-                        array[i] = activeOrderers.get(i);
-                    }
+                        // send contents to the orderers
+                        TOMMessage reply = new TOMMessage(id,
+                                tuple.msgContext.getSession(),
+                                tuple.sequence, //change sequence because the message is going to be received by all clients, not just the original sender
+                                tuple.msgContext.getOperationId(),
+                                serialized,
+                                replica.getReplicaContext().getCurrentView().getId(),
+                                tuple.msgContext.getType());
 
-                    replica.getReplicaContext().getServerCommunicationSystem().send(array, reply);
+
+                        int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
+
+                        List<Integer> activeOrderers = new LinkedList<>();
+
+                        for (Integer c : clients) {
+                            if (orderers.contains(c)) {
+
+                                activeOrderers.add(c);
+
+                            }
+                        }
+
+
+                        int[] array = new int[activeOrderers.size()];
+                        for (int i = 0; i < array.length; i++) {
+                            array[i] = activeOrderers.get(i);
+                        }
+
+                        replica.getReplicaContext().getServerCommunicationSystem().send(array, reply);                    
                     
-                    this.block = null;
-                    this.msgContext = null;
-                    this.seq = -1;
-                                            
-                    this.queue.put(this);
+                    }
+                    
 
                 } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException ex) {
                     Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
@@ -787,6 +799,22 @@ public class BFTNode extends DefaultRecoverable {
 
         }
     }
+    
+    private class BFTTuple {
+        
+        Common.Block block = null;
+        MessageContext msgContext = null;
+        int sequence = -1;
+        
+        BFTTuple (Common.Block block, MessageContext msgCtx, int sequence) {
+            
+            this.block = block;
+            this.msgContext = msgCtx;
+            this.sequence = sequence;
+            
+        }
+    }
+    
     private class NoopReplier implements Replier {
 
         @Override
