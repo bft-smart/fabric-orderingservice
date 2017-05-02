@@ -67,8 +67,8 @@ public class TestSignatures {
     public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
         
         
-        if(args.length < 7) {
-            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> <sig thread batch>");
+        if(args.length < 8) {
+            System.out.println("Use: java TestSignatures <privKey> <certificate> <batch size> <envelope size> <two sigs?> <parallelism> <sig thread batch> <block pre-generation>");
             System.exit(-1);
         }  
         
@@ -84,6 +84,7 @@ public class TestSignatures {
         boolean twoSigs =  Boolean.parseBoolean(args[4]);
         int parallelism = Integer.parseInt(args[5]);
         int sigBatch = Integer.parseInt(args[6]);
+        boolean preGen = Boolean.parseBoolean(args[7]);
 
         /*TestSignatures.executor = Executors.newFixedThreadPool(parallelism, (Runnable r) -> {
             Thread t = new Thread(r);
@@ -104,39 +105,43 @@ public class TestSignatures {
                 
         interval = 100 * sigBatch;
         
+        Common.Block[] blocks = new Common.Block[NUM_BATCHES];
+
         //Generate pool of batches
         System.out.print("Generating " + NUM_BATCHES + " batches with " + batchSize + " envelopes each... ");
         byte[][][] batches = new byte[NUM_BATCHES][batchSize][];
         for (int i = 0; i < NUM_BATCHES; i++) {
-            
+
             for (int j = 0; j < batchSize; j++) {
-                
+
                 batches[i][j] = new byte[envSize];
-                
+
                 rand.nextBytes(batches[i][j]);
-                
-                
+
+
             }
         }
-        
+
         System.out.println(" done!");
         
-        System.out.print("Generating batch pool of " + NUM_BATCHES + " blocks... ");
-        
-        Common.Block[] blocks = new Common.Block[NUM_BATCHES];
-        for (int i = 0; i < NUM_BATCHES; i++) {
+        if (preGen) {
             
-            byte[] dummyDigest = new byte[rand.nextInt(1000)];
-            
-            rand.nextBytes(dummyDigest);
-                    
-            dummyDigest = TestSignatures.crypto.hash(dummyDigest);
-            
-            
-            blocks[i] = createNextBlock(i, dummyDigest, batches[rand.nextInt(batches.length)]);
+            System.out.print("Generating batch pool of " + NUM_BATCHES + " blocks... ");
+
+            for (int i = 0; i < NUM_BATCHES; i++) {
+
+                byte[] dummyDigest = new byte[rand.nextInt(1000)];
+
+                rand.nextBytes(dummyDigest);
+
+                dummyDigest = TestSignatures.crypto.hash(dummyDigest);
+
+
+                blocks[i] = createNextBlock(i, dummyDigest, batches[rand.nextInt(batches.length)]);
+            }
+
+            System.out.println(" done!");
         }
-        
-        System.out.println(" done!");
         
         System.out.println("Generating signatures with a pool of " + NUM_BATCHES + " blocks... ");
         
@@ -151,12 +156,28 @@ public class TestSignatures {
             LinkedList<Common.Block> l = new LinkedList<>();
             
             for (int j = 0; j < sigBatch; j++) {
+                                
+                if (preGen) {
+                    
+                    // Force the code to always sign different data
+                    Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+                    block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+
+                    l.add(block.build());
+                    
+                } else {
+                    
+                    byte[] dummyDigest = new byte[rand.nextInt(1000)];
+
+                    rand.nextBytes(dummyDigest);
+
+                    dummyDigest = TestSignatures.crypto.hash(dummyDigest);
+                    
+                    Common.Block block = createNextBlock(i, dummyDigest, batches[rand.nextInt(batches.length)]);
+                    
+                    l.add(block);
+                }
                 
-                // Force the code to always sign different data
-                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
-                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
-                
-                l.add(block.build());
             }
             
             s.input(l);
@@ -184,10 +205,25 @@ public class TestSignatures {
             
             for (int i = 0; i < sigBatch; i++) {
                 
-                Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
-                block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
-                
-                l.add(block.build());
+                if (preGen) {
+                    
+                    Common.Block.Builder block = blocks[rand.nextInt(NUM_BATCHES)].toBuilder();
+                    block.setHeader(blocks[rand.nextInt(NUM_BATCHES)].getHeader());
+
+                    l.add(block.build());
+                    
+                } else {
+                    
+                    byte[] dummyDigest = new byte[rand.nextInt(1000)];
+
+                    rand.nextBytes(dummyDigest);
+
+                    dummyDigest = TestSignatures.crypto.hash(dummyDigest);
+                    
+                    Common.Block block = createNextBlock(i, dummyDigest, batches[rand.nextInt(batches.length)]);
+                    
+                    l.add(block);
+                }
             
             }
             
