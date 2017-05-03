@@ -5,6 +5,7 @@
         <group>
             <file>file:/home/joao/NetBeansProjects/BFT-Proxy/src/bft/TestSignatures.java</file>
             <file>file:/home/joao/NetBeansProjects/BFT-Proxy/src/bft/BFTNode.java</file>
+            <file>file:/home/joao/NetBeansProjects/BFT-Proxy/src/bft/BlockCutter.java</file>
         </group>
     </open-files>
 </project-private>

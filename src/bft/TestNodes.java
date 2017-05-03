@@ -82,7 +82,7 @@ public class TestNodes {
         }
     }
     
-    private static byte[] serializeBatchParams() throws IOException {
+    public static byte[] serializeBatchParams() throws IOException {
 
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutput out = new ObjectOutputStream(bos);
@@ -95,7 +95,7 @@ public class TestNodes {
         return bos.toByteArray();
     }
     
-    private static Common.Block createGenesisBlock() throws NoSuchAlgorithmException, NoSuchProviderException {
+    public static Common.Block createGenesisBlock() throws NoSuchAlgorithmException, NoSuchProviderException {
         
         //initialize
         Common.BlockHeader.Builder blockHeaderBuilder = Common.BlockHeader.newBuilder();

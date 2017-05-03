@@ -49,7 +49,7 @@ import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 public class TestSignatures {
     
     private static CryptoPrimitives crypto;
-    private static final int NUM_BATCHES = 1000;
+    public static final int NUM_BATCHES = 1000;
     
     private static final String Mspid = "DEFAULT";
 

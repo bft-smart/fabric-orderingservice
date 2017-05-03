@@ -79,7 +79,7 @@ public class BFTNode extends DefaultRecoverable {
     private LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
     private BlockThread blockThread;
-    private final int SIG_LIMIT = 10000;
+    private final int SIG_LIMIT = 1000;
     private int sigIndex = 0;
     private SignerSenderThread currentSST = null;
     
@@ -177,7 +177,7 @@ public class BFTNode extends DefaultRecoverable {
         return replies;
     }
 
-    private byte[] executeSingle(byte[] command, MessageContext msgCtx)  {
+    public byte[] executeSingle(byte[] command, MessageContext msgCtx)  {
                 
         
         if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
