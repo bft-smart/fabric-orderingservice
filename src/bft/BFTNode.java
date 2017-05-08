@@ -73,7 +73,7 @@ public class BFTNode extends DefaultRecoverable {
     private Identities.SerializedIdentity ident;
     private CryptoPrimitives crypto;
     private Log logger;
-    public static final int REQUEST_WINDOW = 100000;
+    public static final int REQUEST_WINDOW = 10000;
     
     //signature thread stuff
     private int paralellism;
