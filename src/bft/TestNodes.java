@@ -5,7 +5,9 @@
  */
 package bft;
 
+import bftsmart.communication.client.ReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
+import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import com.google.protobuf.ByteString;
@@ -18,6 +20,9 @@ import java.security.NoSuchProviderException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.hyperledger.fabric.protos.common.Common;
 
 /**
@@ -126,7 +131,11 @@ public class TestNodes {
         byte[] env;
         int delay;
         AsynchServiceProxy proxy;
-
+        
+        private int lastSeqNumber = -1;
+        private final Lock inputLock;
+        private final Condition windowAvailable;
+        private boolean windowFull = false;
         
         public ProxyThread (int id, byte[] env, int delay) {
             this.id = id;
@@ -134,9 +143,12 @@ public class TestNodes {
             this.delay = delay;
             this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
-            this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
+            this.inputLock = new ReentrantLock();
+            this.windowAvailable = inputLock.newCondition();
+            
+            /*this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 //do nothing
-            });
+            });*/
 
         }
 
@@ -146,8 +158,38 @@ public class TestNodes {
 
                 while (true) {
                 
-                    int reqId = proxy.invokeAsynchRequest(this.env, null, TOMMessageType.ORDERED_REQUEST);
-                    proxy.cleanAsynchRequest(reqId);
+                                        
+                    if (((this.lastSeqNumber+1) % BFTNode.REQUEST_WINDOW) == 0 && this.lastSeqNumber > 0) windowFull = true;
+                    
+                    this.lastSeqNumber = proxy.invokeAsynchRequest(this.env, (RequestContext rc, TOMMessage tomm) -> {
+                        
+                        System.out.println("Client " + id + " received reply from replicas");
+                        
+                        this.inputLock.lock();
+                        
+                        if (rc.getReqId() == lastSeqNumber && windowFull) {
+                            
+                            System.out.println("Window of client " + id + " is available");
+                            windowFull = false;
+                            this.windowAvailable.signalAll();
+                        }
+                        this.inputLock.unlock();
+                            
+                    }, TOMMessageType.ORDERED_REQUEST);
+                    
+                    
+                    this.inputLock.lock();
+                    
+                    if (windowFull) {
+                        
+                        System.out.println("Window of client " + id + " is full");
+                        this.windowAvailable.awaitUninterruptibly();
+                        
+                    }
+                    
+                    this.inputLock.unlock();
+                    
+                    proxy.cleanAsynchRequest(this.lastSeqNumber);
                     
                     try {
                         if (this.delay > 0) Thread.sleep(this.delay);

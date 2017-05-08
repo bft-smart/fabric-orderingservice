@@ -73,12 +73,13 @@ public class BFTNode extends DefaultRecoverable {
     private Identities.SerializedIdentity ident;
     private CryptoPrimitives crypto;
     private Log logger;
+    public static final int REQUEST_WINDOW = 100000;
     
     //signature thread stuff
     private int paralellism;
     private LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
-    private BlockThread blockThread;
+    //private BlockThread blockThread;
     private final int SIG_LIMIT = 1000;
     private int sigIndex = 0;
     private SignerSenderThread currentSST = null;
@@ -101,7 +102,7 @@ public class BFTNode extends DefaultRecoverable {
     
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
         this.id = id;
-    	this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
+    	this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new FlowControlReplier());
         
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
@@ -123,8 +124,8 @@ public class BFTNode extends DefaultRecoverable {
             this.executor.execute(new SignerSenderThread(this.queue));
         }
         
-        this.blockThread = new BlockThread();
-        this.blockThread.start();
+        //this.blockThread = new BlockThread();
+        //this.blockThread.start();
 
         this.orderers = new TreeSet<>();
         for (int o : orderers) {
@@ -588,7 +589,7 @@ public class BFTNode extends DefaultRecoverable {
         return new byte[0];
     }
 
-    private class BlockThread extends Thread {
+    /*private class BlockThread extends Thread {
         
         private LinkedBlockingQueue<Entry<byte[],MessageContext>> envelopes;
         
@@ -661,7 +662,7 @@ public class BFTNode extends DefaultRecoverable {
                 
             }
         }
-    }
+    }*/
     
     private class SignerSenderThread implements Runnable {
         
@@ -815,16 +816,22 @@ public class BFTNode extends DefaultRecoverable {
         }
     }
     
-    private class NoopReplier implements Replier {
+    private class FlowControlReplier implements Replier {
 
+        private ReplicaContext rc;
+    
         @Override
-        public void setReplicaContext(ReplicaContext rc) {
-            //nothing
+        public void manageReply(TOMMessage request, MessageContext msgCtx) {
+            
+            if (request.getSequence() % REQUEST_WINDOW == 0) {
+                System.out.println("Window of replica " + id + " is available");
+                rc.getServerCommunicationSystem().send(new int[]{request.getSender()}, request.reply);
+            }
         }
 
         @Override
-        public void manageReply(TOMMessage tomm, MessageContext mc) {
-            //nothing
+        public void setReplicaContext(ReplicaContext rc) {
+            this.rc = rc;
         }
     
     }
