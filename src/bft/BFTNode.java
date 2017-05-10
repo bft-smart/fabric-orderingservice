@@ -87,6 +87,7 @@ public class BFTNode extends DefaultRecoverable {
     
     //measurements
     private Storage totalLatency = null;
+    private Storage posConsLatency = null;
     private int interval = 100000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
@@ -107,6 +108,7 @@ public class BFTNode extends DefaultRecoverable {
     	this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new FlowControlReplier());
         
         this.totalLatency = new Storage(this.interval);
+        this.posConsLatency = new Storage(this.interval);
         
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
@@ -234,6 +236,7 @@ public class BFTNode extends DefaultRecoverable {
         msgCtx.getFirstInBatch().executedTime = System.nanoTime();
         
         totalLatency.store(msgCtx.getFirstInBatch().executedTime - msgCtx.getFirstInBatch().receptionTime);
+        posConsLatency.store(msgCtx.getFirstInBatch().executedTime - msgCtx.getFirstInBatch().decisionTime); 
         
         
         
@@ -251,6 +254,8 @@ public class BFTNode extends DefaultRecoverable {
             System.out.println("Total latency = " + totalLatency.getAverage(false) / 1000 + " (+/- "+ (long)totalLatency.getDP(false) / 1000 +") us ");
             totalLatency.reset();
             
+            System.out.println("Pos-consensus latency = " + posConsLatency.getAverage(false) / 1000 + " (+/- "+ (long)posConsLatency.getDP(false) / 1000 +") us ");
+            posConsLatency.reset();
         }
                 
         logger.debug("Envelopes received: " + countEnvelopes);
