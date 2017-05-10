@@ -9,6 +9,7 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.leaderchange.CertifiedDecision;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -28,8 +29,8 @@ public class TestNodeCode {
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 6) {
-            System.out.println("Use: java BFTNode <thread pool size> <certificate key file> <private key file> <batch size> <env size> <delay>");
+        if(args.length < 7) {
+            System.out.println("Use: java BFTNode <thread pool size> <certificate key file> <private key file> <envs per block> <env size> <delay> <creation batch>");
             System.exit(-1);
         }
         
@@ -42,6 +43,7 @@ public class TestNodeCode {
         int batchSize = Integer.parseInt(args[3]);
         int envSize =Integer.parseInt(args[4]);
         int delay =Integer.parseInt(args[5]);
+        int creationBatch =Integer.parseInt(args[6]);
         rand = new Random(System.nanoTime());
         
         //Generate pool of batches
@@ -72,45 +74,47 @@ public class TestNodeCode {
 
         while (true) {
             
-            /*byte[][] envs = batches[rand.nextInt(batches.length)];
+            LinkedList<TestTuple> l = new LinkedList<>();
 
-            msgCtx = new MessageContext(-1, -1, TOMMessageType.ORDERED_REQUEST, -1, -1, -1, -1, null, -1, rand.nextInt(10), rand.nextLong(), -1, -1, -1, null, null, false);
-                        
-            node.executeSingle(envs[rand.nextInt(envs.length)], msgCtx);*/
-            
-            int consensusBatch = rand.nextInt(49) + 1;
-            int proposeBatch = rand.nextInt(399) + 1;
-            
-            int[] cons = new int[consensusBatch];
-            int[] regencies = new int[consensusBatch];
-            int[] leaders = new int[consensusBatch];
-            CertifiedDecision[] decisions = new CertifiedDecision[consensusBatch];
-            TOMMessage[][] requests = new TOMMessage[consensusBatch][proposeBatch];
-            
-            for (int i = 0; i < consensusBatch; i++) {
-                
-                cons[i] = i;
-                regencies[i] = 0;
-                leaders[i] = 0;
-                decisions[i] = new CertifiedDecision();
-                
-                for (int j = 0; j < proposeBatch; j++) {
-                    
-                    byte[][] envs = batches[rand.nextInt(batches.length)];
-                    
-                    TOMMessage tomm = new TOMMessage(-1, -1, -1, envs[rand.nextInt(envs.length)], 0);
-                    tomm.numOfNonces = rand.nextInt(10);
-                    tomm.seed = rand.nextLong();
-            
-                    requests[i][j] = tomm;
+            for (int u = 0; u < creationBatch; u++) {
+
+                int consensusBatch = rand.nextInt(49) + 1;
+                int proposeBatch = rand.nextInt(399) + 1;
+
+                int[] cons = new int[consensusBatch];
+                int[] regencies = new int[consensusBatch];
+                int[] leaders = new int[consensusBatch];
+                CertifiedDecision[] decisions = new CertifiedDecision[consensusBatch];
+                TOMMessage[][] requests = new TOMMessage[consensusBatch][proposeBatch];
+
+                for (int i = 0; i < consensusBatch; i++) {
+
+                    cons[i] = i;
+                    regencies[i] = 0;
+                    leaders[i] = 0;
+                    decisions[i] = new CertifiedDecision();
+
+                    for (int j = 0; j < proposeBatch; j++) {
+
+                        byte[][] envs = batches[rand.nextInt(batches.length)];
+
+                        TOMMessage tomm = new TOMMessage(-1, -1, -1, envs[rand.nextInt(envs.length)], 0);
+                        tomm.numOfNonces = rand.nextInt(10);
+                        tomm.seed = rand.nextLong();
+
+                        requests[i][j] = tomm;
+                    }
+
                 }
 
+                //worker.input(cons, regencies, leaders, decisions, requests);
+                l.add(new TestTuple(cons, regencies, leaders, decisions, requests));
+
             }
-            
-            //node.replica.receiveMessages(cons, regencies, leaders, decisions, requests);
-            worker.input(cons, regencies, leaders, decisions, requests);
-            
+
+            worker.input(l);
             Thread.sleep(delay);
+
         }
     }
     
@@ -149,11 +153,12 @@ public class TestNodeCode {
         }
         
         
-        public void input(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) throws InterruptedException {
-            
+        //public void input(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) throws InterruptedException {
+          public void input (Collection<TestTuple> tuples) {
             this.inputLock.lock();
             
-            this.input.put(new TestTuple(consId, regencies, leaders, cDecs, requests));
+            //this.input.put(new TestTuple(consId, regencies, leaders, cDecs, requests));
+            this.input.addAll(tuples);
             
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
