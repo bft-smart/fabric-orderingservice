@@ -6,7 +6,9 @@
 package bft;
 
 import bftsmart.tom.MessageContext;
+import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
+import bftsmart.tom.leaderchange.CertifiedDecision;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -62,11 +64,42 @@ public class TestNodeCode {
 
         while (true) {
             
+            /*byte[][] envs = batches[rand.nextInt(batches.length)];
+
             msgCtx = new MessageContext(-1, -1, TOMMessageType.ORDERED_REQUEST, -1, -1, -1, -1, null, -1, rand.nextInt(10), rand.nextLong(), -1, -1, -1, null, null, false);
+                        
+            node.executeSingle(envs[rand.nextInt(envs.length)], msgCtx);*/
             
-            byte[][] envs = batches[rand.nextInt(batches.length)];
+            int consensusBatch = rand.nextInt(49) + 1;
+            int proposeBatch = rand.nextInt(399) + 1;
             
-            node.executeSingle(envs[rand.nextInt(envs.length)], msgCtx);
+            int[] cons = new int[consensusBatch];
+            int[] regencies = new int[consensusBatch];
+            int[] leaders = new int[consensusBatch];
+            CertifiedDecision[] decisions = new CertifiedDecision[consensusBatch];
+            TOMMessage[][] requests = new TOMMessage[consensusBatch][proposeBatch];
+            
+            for (int i = 0; i < consensusBatch; i++) {
+                
+                cons[i] = i;
+                regencies[i] = 0;
+                leaders[i] = 0;
+                decisions[i] = new CertifiedDecision();
+                
+                for (int j = 0; j < proposeBatch; j++) {
+                    
+                    byte[][] envs = batches[rand.nextInt(batches.length)];
+                    
+                    TOMMessage tomm = new TOMMessage(-1, -1, -1, envs[rand.nextInt(envs.length)], 0);
+                    tomm.numOfNonces = rand.nextInt(10);
+                    tomm.seed = rand.nextLong();
+            
+                    requests[i][j] = tomm;
+                }
+
+            }
+            
+            node.replica.receiveMessages(cons, regencies, leaders, decisions, requests);
         }
     }
 }

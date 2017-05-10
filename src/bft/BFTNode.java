@@ -66,7 +66,7 @@ public class BFTNode extends DefaultRecoverable {
     
     private int id;
     private String Mspid;
-    private ServiceReplica replica = null;
+    public ServiceReplica replica = null;
     private PrivateKey privKey = null;
     private X509CertificateHolder certificate = null;
     private byte[] serializedCert = null;
