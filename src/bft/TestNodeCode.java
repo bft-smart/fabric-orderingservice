@@ -28,8 +28,8 @@ public class TestNodeCode {
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 5) {
-            System.out.println("Use: java BFTNode <thread pool size> <certificate key file> <private key file> <batch size> <env size>");
+        if(args.length < 6) {
+            System.out.println("Use: java BFTNode <thread pool size> <certificate key file> <private key file> <batch size> <env size> <delay>");
             System.exit(-1);
         }
         
@@ -41,6 +41,7 @@ public class TestNodeCode {
         
         int batchSize = Integer.parseInt(args[3]);
         int envSize =Integer.parseInt(args[4]);
+        int delay =Integer.parseInt(args[5]);
         rand = new Random(System.nanoTime());
         
         //Generate pool of batches
@@ -108,6 +109,8 @@ public class TestNodeCode {
             
             //node.replica.receiveMessages(cons, regencies, leaders, decisions, requests);
             worker.input(cons, regencies, leaders, decisions, requests);
+            
+            Thread.sleep(delay);
         }
     }
     
@@ -173,6 +176,19 @@ public class TestNodeCode {
 
                 for (TestTuple tuple : list) {
 
+                    /*for (TOMMessage[] requests : tuple.requests) {
+                        
+                        for (TOMMessage request : requests) {
+
+                            MessageContext msgCtx = new MessageContext(-1, 0, TOMMessageType.ORDERED_REQUEST, -1, -1, -1, -1, null, -1, request.numOfNonces, request.seed, -1, -1, -1, null, null, false);
+
+                            node.executeSingle(request.getContent(), msgCtx);
+
+                        }
+                        
+                    }*/
+
+                                    
                     node.replica.receiveMessages(tuple.consId, tuple.regencies, tuple.leaders, tuple.cDecs, tuple.requests);
                 }
             }
