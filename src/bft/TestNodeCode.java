@@ -9,8 +9,12 @@ import bftsmart.tom.MessageContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.leaderchange.CertifiedDecision;
-import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.Random;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *
@@ -20,6 +24,7 @@ public class TestNodeCode {
     
     private static BFTNode node;
     private static Random rand;
+    private static WorkerThread worker;
     
     public static void main(String[] args) throws Exception{
 
@@ -31,6 +36,8 @@ public class TestNodeCode {
         System.out.print("Launching node...");
         
         node = new BFTNode(0, Integer.parseInt(args[0]), args[1], args[2], new int[] {1001});
+        worker = new WorkerThread();
+        worker.start();
         
         int batchSize = Integer.parseInt(args[3]);
         int envSize =Integer.parseInt(args[4]);
@@ -99,7 +106,76 @@ public class TestNodeCode {
 
             }
             
-            node.replica.receiveMessages(cons, regencies, leaders, decisions, requests);
+            //node.replica.receiveMessages(cons, regencies, leaders, decisions, requests);
+            worker.input(cons, regencies, leaders, decisions, requests);
+        }
+    }
+    
+    public static class TestTuple {
+        
+        public int consId[];
+        public int regencies[];
+        public int leaders[];
+        public CertifiedDecision[] cDecs;
+        public TOMMessage[][] requests;
+        
+        public TestTuple(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) {
+            
+            this.consId = consId;
+            this.regencies = regencies;
+            this.leaders = leaders;
+            this.cDecs = cDecs;
+            this.requests = requests;
+            
+        }
+    }
+    
+    public static class WorkerThread extends Thread {
+        
+        private LinkedBlockingQueue<TestTuple>  input;
+        
+        private final Lock inputLock;
+        private final Condition notEmptyInput;
+        
+        public WorkerThread() {
+            
+            this.input = new LinkedBlockingQueue<>();
+            
+            this.inputLock = new ReentrantLock();
+            this.notEmptyInput = inputLock.newCondition();
+        }
+        
+        
+        public void input(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) throws InterruptedException {
+            
+            this.inputLock.lock();
+            
+            this.input.put(new TestTuple(consId, regencies, leaders, cDecs, requests));
+            
+            this.notEmptyInput.signalAll();
+            this.inputLock.unlock();
+        }
+        
+        public void run() {
+            
+            while (true) {
+                
+                LinkedList<TestTuple> list = new LinkedList<>();
+
+                this.inputLock.lock();
+
+                if(this.input.isEmpty()) {
+                    this.notEmptyInput.awaitUninterruptibly();
+
+                }
+                this.input.drainTo(list);
+                this.inputLock.unlock();
+
+                for (TestTuple tuple : list) {
+
+                    node.replica.receiveMessages(tuple.consId, tuple.regencies, tuple.leaders, tuple.cDecs, tuple.requests);
+                }
+            }
         }
     }
 }
