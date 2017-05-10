@@ -11,6 +11,7 @@ import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.Replier;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
+import bftsmart.tom.util.Storage;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.BufferedReader;
@@ -85,6 +86,7 @@ public class BFTNode extends DefaultRecoverable {
     private SignerSenderThread currentSST = null;
     
     //measurements
+    private Storage totalLatency = null;
     private int interval = 100000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
@@ -103,6 +105,8 @@ public class BFTNode extends DefaultRecoverable {
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
         this.id = id;
     	this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new FlowControlReplier());
+        
+        this.totalLatency = new Storage(this.interval);
         
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
@@ -227,7 +231,14 @@ public class BFTNode extends DefaultRecoverable {
             return new byte[0];
         }
          
+        msgCtx.getFirstInBatch().executedTime = System.nanoTime();
+        
+        totalLatency.store(msgCtx.getFirstInBatch().executedTime - msgCtx.getFirstInBatch().receptionTime);
+        
+        
+        
         if (envelopeMeasurementStartTime == -1) envelopeMeasurementStartTime = System.currentTimeMillis();
+        
         
         countEnvelopes++;
                    
@@ -236,6 +247,9 @@ public class BFTNode extends DefaultRecoverable {
             float tp = (float)(interval*1000/(float)(System.currentTimeMillis()-envelopeMeasurementStartTime));
             logger.info("Throughput = " + tp +" envelopes/sec");
             envelopeMeasurementStartTime = System.currentTimeMillis();
+            
+            System.out.println("Total latency = " + totalLatency.getAverage(false) / 1000 + " (+/- "+ (long)totalLatency.getDP(false) / 1000 +") us ");
+            totalLatency.reset();
             
         }
                 
