@@ -238,7 +238,7 @@ public class BFTNode extends DefaultRecoverable {
         if(countEnvelopes % interval == 0) {
             
             float tp = (float)(interval*1000/(float)(System.currentTimeMillis()-envelopeMeasurementStartTime));
-            logger.info("Throughput = " + tp +" envelopes/sec");
+            System.out.println("Throughput = " + tp +" envelopes/sec");
             envelopeMeasurementStartTime = System.currentTimeMillis();
 
         }
@@ -284,7 +284,7 @@ public class BFTNode extends DefaultRecoverable {
             if (countBlocks % interval == 0) {
 
                 float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - blockMeasurementStartTime));
-                logger.info("Throughput = " + tp + " blocks/sec");
+                System.out.println("Throughput = " + tp + " blocks/sec");
                 blockMeasurementStartTime = System.currentTimeMillis();
 
             }
@@ -750,7 +750,7 @@ public class BFTNode extends DefaultRecoverable {
                     if (countSigs % interval == 0) {
 
                         float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                            logger.info("Throughput = " + tp + " sigs/sec");
+                            System.out.println("Throughput = " + tp + " sigs/sec");
                             sigsMeasurementStartTime = System.currentTimeMillis();
 
                         }
