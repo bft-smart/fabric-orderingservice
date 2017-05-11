@@ -43,7 +43,8 @@ public class BlockCutter {
     public List<byte[][]> ordered(byte [] env) throws IOException {
        
         LinkedList batches = new LinkedList<>();
-        int messageSizeBytes = messageSizeBytes(env);
+        //int messageSizeBytes = messageSizeBytes(env);
+        int messageSizeBytes = env.length;
         
         //TODO: implement stuff for isolated envelops (see original golang BlockCutter code)
         

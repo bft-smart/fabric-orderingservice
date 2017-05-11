@@ -66,7 +66,7 @@ public class TestNodeCode {
 
         MessageContext msgCtx = new MessageContext(1001, -1, TOMMessageType.ORDERED_REQUEST, -1, 0, -1, -1, null, -1, rand.nextInt(10), rand.nextLong(), -1, -1, -1, null, null, false);
 
-        node.executeSingle(TestNodes.serializeBatchParams(), msgCtx);
+        node.executeSingle(TestNodes.serializeBatchParams(envSize), msgCtx);
         
         msgCtx = new MessageContext(1001, -1, TOMMessageType.ORDERED_REQUEST, -1, 1, -1, -1, null, -1, rand.nextInt(10), rand.nextLong(), -1, -1, -1, null, null, false);
         
