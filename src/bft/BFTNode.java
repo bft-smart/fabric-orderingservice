@@ -86,7 +86,7 @@ public class BFTNode extends DefaultRecoverable {
     private SignerSenderThread currentSST = null;
     
     //measurements
-    private int interval = 100000;
+    private int interval = 10000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
     private long sigsMeasurementStartTime = -1;
