@@ -34,14 +34,15 @@ public class TestNodes {
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 5) {
-            System.out.println("Use: java TestNodes <init ID> <num clients> <delay> <envelope payload size> <add signature?>");
+        if(args.length < 6) {
+            System.out.println("Use: java TestNodes <init ID> <num clients> <delay> <envelope payload size> <add signature?> <block batch>");
             System.exit(-1);
         }      
         
         int initID = Integer.parseInt(args[0]);
         int clients = Integer.parseInt(args[1]);
         int delay = Integer.parseInt(args[2]);
+        int batch = Integer.parseInt(args[5]);
         
         AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
@@ -49,7 +50,7 @@ public class TestNodes {
             });
         
         
-        int reqId = proxy.invokeAsynchRequest(serializeBatchParams(), null, TOMMessageType.ORDERED_REQUEST);
+        int reqId = proxy.invokeAsynchRequest(serializeBatchParams(batch), null, TOMMessageType.ORDERED_REQUEST);
         proxy.cleanAsynchRequest(reqId);
         reqId = proxy.invokeAsynchRequest(createGenesisBlock().toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
         proxy.cleanAsynchRequest(reqId);
@@ -87,12 +88,12 @@ public class TestNodes {
         }
     }
     
-    public static byte[] serializeBatchParams() throws IOException {
+    public static byte[] serializeBatchParams(int batch) throws IOException {
 
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutput out = new ObjectOutputStream(bos);
         out.writeLong(524288);
-        out.writeLong(10);
+        out.writeLong(batch);
         out.flush();
         bos.flush();
         out.close();
