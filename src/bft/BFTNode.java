@@ -86,8 +86,6 @@ public class BFTNode extends DefaultRecoverable {
     private SignerSenderThread currentSST = null;
     
     //measurements
-    private Storage totalLatency = null;
-    private Storage posConsLatency = null;
     private int interval = 100000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
@@ -106,10 +104,7 @@ public class BFTNode extends DefaultRecoverable {
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
         this.id = id;
     	this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new FlowControlReplier());
-        
-        this.totalLatency = new Storage(this.interval);
-        this.posConsLatency = new Storage(this.interval);
-        
+                
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
  
@@ -235,11 +230,6 @@ public class BFTNode extends DefaultRecoverable {
          
         msgCtx.getFirstInBatch().executedTime = System.nanoTime();
         
-        totalLatency.store(msgCtx.getFirstInBatch().executedTime - msgCtx.getFirstInBatch().receptionTime);
-        posConsLatency.store(msgCtx.getFirstInBatch().executedTime - msgCtx.getFirstInBatch().decisionTime); 
-        
-        
-        
         if (envelopeMeasurementStartTime == -1) envelopeMeasurementStartTime = System.currentTimeMillis();
         
         
@@ -250,12 +240,7 @@ public class BFTNode extends DefaultRecoverable {
             float tp = (float)(interval*1000/(float)(System.currentTimeMillis()-envelopeMeasurementStartTime));
             logger.info("Throughput = " + tp +" envelopes/sec");
             envelopeMeasurementStartTime = System.currentTimeMillis();
-            
-            System.out.println("Total latency = " + totalLatency.getAverage(false) / 1000 + " (+/- "+ (long)totalLatency.getDP(false) / 1000 +") us ");
-            totalLatency.reset();
-            
-            System.out.println("Pos-consensus latency = " + posConsLatency.getAverage(false) / 1000 + " (+/- "+ (long)posConsLatency.getDP(false) / 1000 +") us ");
-            posConsLatency.reset();
+
         }
                 
         logger.debug("Envelopes received: " + countEnvelopes);
