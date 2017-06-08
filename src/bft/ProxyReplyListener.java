@@ -21,6 +21,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hyperledger.fabric.protos.common.Common;
@@ -38,6 +41,9 @@ public class ProxyReplyListener implements ReplyReceiver {
     private int replyQuorum;
     private int next;
 
+    private final Lock inputLock;
+    private final Condition blockAvailable;
+        
     private ReplyListener controlFlowListener;
     private Map<Integer, boolean[]> controlFlowReplies;
         
@@ -59,6 +65,9 @@ public class ProxyReplyListener implements ReplyReceiver {
                 ? 0 : -1 //TODO: compare the signature values too
                 ;
         
+        this.inputLock = new ReentrantLock();
+        this.blockAvailable = inputLock.newCondition();
+            
         this.controlFlowListener = controlFlowListener;
     }
     
@@ -131,7 +140,9 @@ public class ProxyReplyListener implements ReplyReceiver {
             
         }
         
-        if (responses.get(next) != null) notifyAll();
+        this.inputLock.lock();
+        if (responses.get(next) != null) this.blockAvailable.signalAll();
+        this.inputLock.unlock();
 
     }
 
@@ -168,14 +179,17 @@ public class ProxyReplyListener implements ReplyReceiver {
     public synchronized Common.Block getNext() {
         
         Common.Block ret = null;
+        
+        this.inputLock.lock();
         while ((ret = responses.get(next)) == null) {
-            try {
-                wait();
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-            }
+            //try {
+                this.blockAvailable.awaitUninterruptibly();
+            //} catch (InterruptedException ex) {
+            //    ex.printStackTrace();
+            //}
             
         }
+        this.inputLock.unlock();
         
         replies.remove(next);
         responses.remove(next);
