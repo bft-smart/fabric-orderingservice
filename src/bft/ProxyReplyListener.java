@@ -35,10 +35,12 @@ public class ProxyReplyListener implements ReplyReceiver {
     private Map<Integer, Common.Block> responses;
     private ClientViewController viewManager;
     private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
-    private ReplyListener controlFlowListener;
     private int replyQuorum;
     private int next;
-            
+
+    private ReplyListener controlFlowListener;
+    private Map<Integer, boolean[]> controlFlowReplies;
+        
     private Log logger;
     
     public ProxyReplyListener(ClientViewController viewManager, ReplyListener controlFlowListener) {
@@ -48,6 +50,7 @@ public class ProxyReplyListener implements ReplyReceiver {
         this.viewManager = viewManager;
         responses = new ConcurrentHashMap<>();
         replies = new HashMap<>();
+        controlFlowReplies = new HashMap<>();
         replyQuorum = getReplyQuorum();
         
         comparator = (Entry<Common.Block, Common.Metadata[]> o1, Entry<Common.Block, Common.Metadata[]> o2) -> o1.getKey().equals(o2.getKey()) && // compare entire block
@@ -64,6 +67,19 @@ public class ProxyReplyListener implements ReplyReceiver {
 
         logger.debug("Replica " + tomm.getSender());
         logger.debug("Sequence " + tomm.getSequence());
+     
+        int pos = viewManager.getCurrentViewPos(tomm.getSender());
+
+        if (pos < 0) { //ignore messages that don't come from replicas
+            return;
+        }
+        
+        if (tomm.getContent().length == 0) { // in case it is the control flow mechanism
+            
+            controlFlow(tomm, pos);
+            
+            return;
+        }
         
         Common.Block response = null;
         
@@ -71,11 +87,6 @@ public class ProxyReplyListener implements ReplyReceiver {
             
             replies.remove(tomm.getSequence());
             responses.remove(tomm.getSequence());
-            return;
-        }
-        int pos = viewManager.getCurrentViewPos(tomm.getSender());
-
-        if (pos < 0) { //ignore messages that don't come from replicas
             return;
         }
                 
@@ -87,69 +98,73 @@ public class ProxyReplyListener implements ReplyReceiver {
         Common.Metadata metadata[] = new Common.Metadata[2];
         
         Entry[] reps = replies.get(tomm.getSequence());
-        boolean controlFlow = false;
-
-        if (tomm.getContent().length == 0) { // in case it is the control flow mechanism
-            
-            controlFlow = true;
-            reps[pos] = null;
+        
+        try {
+            contents = deserializeContents(tomm.getContent());
+            if (contents == null || contents.length < 3) return;
+            block = Common.Block.parseFrom(contents[0]);
+            if (block == null) return;
+            metadata[0] = Common.Metadata.parseFrom(contents[1]);
+            if (metadata[0] == null) return;
+            metadata[1] = Common.Metadata.parseFrom(contents[2]);
+            if (metadata[1] == null) return;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return;
         }
-        else {
-            
-            try {
-                contents = deserializeContents(tomm.getContent());
-                if (contents == null || contents.length < 3) return;
-                block = Common.Block.parseFrom(contents[0]);
-                if (block == null) return;
-                metadata[0] = Common.Metadata.parseFrom(contents[1]);
-                if (metadata[0] == null) return;
-                metadata[1] = Common.Metadata.parseFrom(contents[2]);
-                if (metadata[1] == null) return;
-            } catch (IOException ex) {
-                ex.printStackTrace();
-                return;
-            }
 
-            reps[pos] = new SimpleEntry<>(block,metadata);
+        reps[pos] = new SimpleEntry<>(block,metadata);
 
-        }
- 
         int sameContent = 1;
       
         for (int i = 0; i < reps.length; i++) {
             
-            if (controlFlow) {
-                
-                if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] == null) {
-                                        
-                    sameContent++;
-                    if (sameContent >= replyQuorum) {
-                        
-                        RequestContext requestContext = new RequestContext(tomm.getSequence(), tomm.getOperationId(),
-				tomm.getReqType(), null, System.currentTimeMillis(), null);
-                        
-                        if (this.controlFlowListener != null) this.controlFlowListener.replyReceived(requestContext, tomm);
-                    }
-            
-                }
-            } else {
-                
-                if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] != null
-                                            && (comparator.compare(reps[i], reps[pos]) == 0)) {
+            if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] != null
+                                        && (comparator.compare(reps[i], reps[pos]) == 0)) {
 
-                    sameContent++;
-                    if (sameContent >= replyQuorum) {
-                        response = getBlock(reps, pos);
-                        responses.put(tomm.getSequence(), response);
-                    }
-                }            
-            }
+                sameContent++;
+                if (sameContent >= replyQuorum) {
+                    response = getBlock(reps, pos);
+                    responses.put(tomm.getSequence(), response);
+                }
+            }            
+            
         }
         
         if (responses.get(next) != null) notifyAll();
 
     }
 
+    
+    private void controlFlow(TOMMessage tomm, int pos) {
+        
+        int sameContent = 1;
+        
+        boolean[] reps = controlFlowReplies.get(tomm.getSequence());
+        if (reps == null) {
+            reps = new boolean[viewManager.getCurrentViewN()];
+            controlFlowReplies.put(tomm.getSequence(), reps);
+        }
+
+        reps[pos] = true;
+        for (int i = 0; i < reps.length; i++) {
+            if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] == true) {
+                                        
+                sameContent++;
+                if (sameContent >= replyQuorum) {
+
+                    RequestContext requestContext = new RequestContext(tomm.getSequence(), tomm.getOperationId(),
+                            tomm.getReqType(), null, System.currentTimeMillis(), null);
+
+                    controlFlowReplies.remove(tomm.getSequence());
+                    if (this.controlFlowListener != null) this.controlFlowListener.replyReceived(requestContext, tomm);
+                }
+
+            }
+        }
+    }
+    
+    
     public synchronized Common.Block getNext() {
         
         Common.Block ret = null;
@@ -161,6 +176,10 @@ public class ProxyReplyListener implements ReplyReceiver {
             }
             
         }
+        
+        replies.remove(next);
+        responses.remove(next);
+            
         next++;
         
         return ret;
