@@ -273,7 +273,7 @@ public class TestNodes {
                             }
                         }
 
-                    } catch (InvalidProtocolBufferException ex) {
+                    } catch (Exception ex) {
                         ex.printStackTrace();
                     }
                 }
