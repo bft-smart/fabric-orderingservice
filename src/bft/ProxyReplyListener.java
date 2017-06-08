@@ -5,8 +5,10 @@
  */
 package bft;
 
+import bftsmart.communication.client.ReplyListener;
 import bftsmart.communication.client.ReplyReceiver;
 import bftsmart.reconfiguration.ClientViewController;
+import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -33,12 +35,13 @@ public class ProxyReplyListener implements ReplyReceiver {
     private Map<Integer, Common.Block> responses;
     private ClientViewController viewManager;
     private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
+    private ReplyListener controlFlowListener;
     private int replyQuorum;
     private int next;
             
     private Log logger;
     
-    public ProxyReplyListener(ClientViewController viewManager) {
+    public ProxyReplyListener(ClientViewController viewManager, ReplyListener controlFlowListener) {
         
         logger = LogFactory.getLog(ProxyReplyListener.class);
         
@@ -51,8 +54,9 @@ public class ProxyReplyListener implements ReplyReceiver {
                 o1.getValue()[0].getValue().equals(o2.getValue()[0].getValue()) && // compare block signature value
                 o1.getValue()[1].getValue().equals(o2.getValue()[1].getValue()) // compare config signature value
                 ? 0 : -1 //TODO: compare the signature values too
-
-        ;
+                ;
+        
+        this.controlFlowListener = controlFlowListener;
     }
     
     @Override
@@ -82,36 +86,63 @@ public class ProxyReplyListener implements ReplyReceiver {
         Common.Block block = null;
         Common.Metadata metadata[] = new Common.Metadata[2];
         
-        try {
-            contents = deserializeContents(tomm.getContent());
-            if (contents == null || contents.length < 3) return;
-            block = Common.Block.parseFrom(contents[0]);
-            if (block == null) return;
-            metadata[0] = Common.Metadata.parseFrom(contents[1]);
-            if (metadata[0] == null) return;
-            metadata[1] = Common.Metadata.parseFrom(contents[2]);
-            if (metadata[1] == null) return;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return;
-        }
-        
         Entry[] reps = replies.get(tomm.getSequence());
-        
-        reps[pos] = new SimpleEntry<>(block,metadata);
+        boolean controlFlow = false;
 
+        if (tomm.getContent().length == 0) { // in case it is the control flow mechanism
+            
+            controlFlow = true;
+            reps[pos] = null;
+        }
+        else {
+            
+            try {
+                contents = deserializeContents(tomm.getContent());
+                if (contents == null || contents.length < 3) return;
+                block = Common.Block.parseFrom(contents[0]);
+                if (block == null) return;
+                metadata[0] = Common.Metadata.parseFrom(contents[1]);
+                if (metadata[0] == null) return;
+                metadata[1] = Common.Metadata.parseFrom(contents[2]);
+                if (metadata[1] == null) return;
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                return;
+            }
+
+            reps[pos] = new SimpleEntry<>(block,metadata);
+
+        }
+ 
         int sameContent = 1;
       
         for (int i = 0; i < reps.length; i++) {
             
-            if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] != null
-					&& (comparator.compare(reps[i], reps[pos]) == 0)) {
+            if (controlFlow) {
+                
+                if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] == null) {
                                         
-                sameContent++;
-                if (sameContent >= replyQuorum) {
-                    response = getBlock(reps, pos);
-                    responses.put(tomm.getSequence(), response);
+                    sameContent++;
+                    if (sameContent >= replyQuorum) {
+                        
+                        RequestContext requestContext = new RequestContext(tomm.getSequence(), tomm.getOperationId(),
+				tomm.getReqType(), null, System.currentTimeMillis(), null);
+                        
+                        if (this.controlFlowListener != null) this.controlFlowListener.replyReceived(requestContext, tomm);
+                    }
+            
                 }
+            } else {
+                
+                if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] != null
+                                            && (comparator.compare(reps[i], reps[pos]) == 0)) {
+
+                    sameContent++;
+                    if (sameContent >= replyQuorum) {
+                        response = getBlock(reps, pos);
+                        responses.put(tomm.getSequence(), response);
+                    }
+                }            
             }
         }
         
