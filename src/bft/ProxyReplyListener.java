@@ -72,7 +72,7 @@ public class ProxyReplyListener implements ReplyReceiver {
     }
     
     @Override
-    public synchronized void replyReceived(TOMMessage tomm) {            
+    public void replyReceived(TOMMessage tomm) {            
 
         logger.debug("Replica " + tomm.getSender());
         logger.debug("Sequence " + tomm.getSequence());
@@ -176,7 +176,7 @@ public class ProxyReplyListener implements ReplyReceiver {
     }
     
     
-    public synchronized Common.Block getNext() {
+    public Common.Block getNext() {
         
         Common.Block ret = null;
         
