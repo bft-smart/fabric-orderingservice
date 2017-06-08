@@ -183,7 +183,7 @@ public class TestNodes {
                     ByteBuffer buff = ByteBuffer.allocate(size);
                     
                     buff.putInt(this.id);
-                    buff.putLong(System.currentTimeMillis());
+                    buff.putLong(System.nanoTime());
                     
                     while (buff.hasRemaining()) {
                         
@@ -266,7 +266,7 @@ public class TestNodes {
 
                             long time = payload.getLong();
 
-                            latency.store(System.currentTimeMillis() - time);
+                            latency.store(System.nanoTime() - time);
 
                             if (latency.getCount() == 100000) {
 
