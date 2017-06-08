@@ -42,6 +42,12 @@ public class TestNodes {
             System.exit(-1);
         }      
         
+        new TestNodes(args);
+        
+    }
+    
+    public TestNodes(String[] args) throws IOException, NoSuchAlgorithmException, NoSuchProviderException {
+        
         int initID = Integer.parseInt(args[0]);
         int clients = Integer.parseInt(args[1]);
         int delay = Integer.parseInt(args[2]);
@@ -65,8 +71,9 @@ public class TestNodes {
             executor.execute(new ProxyThread(i + initID, Integer.parseInt(args[3]),Boolean.parseBoolean(args[4]), delay, (i == 0 ? proxy : null)));
         
         }
+        
     }
-    
+            
     public static byte[] serializeBatchParams(int batch) throws IOException {
 
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -105,7 +112,7 @@ public class TestNodes {
         return blockBuilder.build();
     }
     
-    private static class ProxyThread implements Runnable {
+    private class ProxyThread implements Runnable {
                 
         int id;
         int payloadSize;
@@ -176,7 +183,7 @@ public class TestNodes {
                     ByteBuffer buff = ByteBuffer.allocate(size);
                     
                     buff.putInt(this.id);
-                    buff.putLong(System.nanoTime());
+                    buff.putLong(System.currentTimeMillis());
                     
                     while (buff.hasRemaining()) {
                         
@@ -227,7 +234,7 @@ public class TestNodes {
         
     }
     
-    static class BlockThread extends Thread {
+    class BlockThread extends Thread {
 
         private int id;
         private Storage latency = null;
@@ -259,7 +266,7 @@ public class TestNodes {
 
                             long time = payload.getLong();
 
-                            latency.store(System.nanoTime() - time);
+                            latency.store(System.currentTimeMillis() - time);
 
                             if (latency.getCount() == 100000) {
 
