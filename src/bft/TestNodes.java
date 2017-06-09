@@ -265,7 +265,8 @@ public class TestNodes {
 
                         ByteBuffer payload = ByteBuffer.wrap(Common.Envelope.parseFrom(env).getPayload().toByteArray());
 
-                        if (this.id == payload.getInt()) {
+                        //if (this.id == payload.getInt()) {
+                        payload.getInt();
 
                             long time = payload.getLong();
 
@@ -281,7 +282,7 @@ public class TestNodes {
 
                                 latency.reset();
                             }
-                        }
+                        //}
 
                     } catch (Exception ex) {
                         ex.printStackTrace();
