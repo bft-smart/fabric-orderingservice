@@ -34,7 +34,13 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class TestNodes {
         
-    
+    private ProxyReplyListener listener;
+    private AsynchServiceProxy proxy;
+    private ExecutorService executor;
+    private BlockThread blockThread;
+            
+    public static int initID;
+
     public static void main(String[] args) throws Exception{
 
         if(args.length < 6) {
@@ -48,27 +54,38 @@ public class TestNodes {
     
     public TestNodes(String[] args) throws IOException, NoSuchAlgorithmException, NoSuchProviderException {
         
-        int initID = Integer.parseInt(args[0]);
+        TestNodes.initID = Integer.parseInt(args[0]);
         int clients = Integer.parseInt(args[1]);
         int delay = Integer.parseInt(args[2]);
         int batch = Integer.parseInt(args[5]);
         
-        AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
-        proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                // do nothing
-                    });
+        this.proxy = new AsynchServiceProxy(TestNodes.initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         
+        this.listener = new ProxyReplyListener(this.proxy.getViewManager());
+        this.proxy.getCommunicationSystem().setReplyReceiver(this.listener);
         
-        int reqId = proxy.invokeAsynchRequest(serializeBatchParams(batch), null, TOMMessageType.ORDERED_REQUEST);
-        proxy.cleanAsynchRequest(reqId);
+        int reqId = this.proxy.invokeAsynchRequest(serializeBatchParams(batch), null, TOMMessageType.ORDERED_REQUEST);
+        this.proxy.cleanAsynchRequest(reqId);
         reqId = proxy.invokeAsynchRequest(createGenesisBlock().toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
-        proxy.cleanAsynchRequest(reqId);
+        this.proxy.cleanAsynchRequest(reqId);
                     
-        ExecutorService executor = Executors.newCachedThreadPool(); 
+        this.blockThread = new BlockThread(TestNodes.initID, this.listener);
+        this.blockThread.start();
+            
+        this.executor = Executors.newCachedThreadPool(); 
+        
+        System.out.println("Waiting 15 seconds...");
+        try
+        {
+            //System.in.read();
+            Thread.sleep(15000);
+        }  
+        catch(Exception e)
+        {}  
         
         for (int i = 0; i < clients; i++) {
         
-            executor.execute(new ProxyThread(i + initID, Integer.parseInt(args[3]),Boolean.parseBoolean(args[4]), delay, (i == 0 ? proxy : null)));
+            this.executor.execute(new ProxyThread(i + TestNodes.initID + 1, Integer.parseInt(args[3]),Boolean.parseBoolean(args[4]), delay));
         
         }
         
@@ -112,14 +129,13 @@ public class TestNodes {
         return blockBuilder.build();
     }
     
-    private class ProxyThread extends Thread {
+    private class ProxyThread implements Runnable {
                 
-        int id;
-        int payloadSize;
-        boolean addSig;
-        int delay;
-        AsynchServiceProxy proxy;
-        BlockThread thread;
+        private int id;
+        private int payloadSize;
+        private boolean addSig;
+        private int delay;
+        private AsynchServiceProxy proxy;
         
         private int lastSeqNumber = -1;
         private final Lock inputLock;
@@ -127,9 +143,8 @@ public class TestNodes {
         private boolean windowFull = false;
         private Random rand;
         private Storage latency = null;
-        private ProxyReplyListener listener;
          
-        public ProxyThread (int id, int payloadSize, boolean addSig, int delay, AsynchServiceProxy proxy) {
+        public ProxyThread (int id, int payloadSize, boolean addSig, int delay) {
             this.id = id;
             this.payloadSize = payloadSize;
             this.addSig = addSig;
@@ -138,32 +153,10 @@ public class TestNodes {
             this.inputLock = new ReentrantLock();
             this.windowAvailable = inputLock.newCondition();
             
-            this.proxy = (proxy != null ? proxy : new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER));
-            this.listener = new ProxyReplyListener(this.proxy.getViewManager(), (RequestContext rc, TOMMessage tomm) -> {
-                        
-                        //System.out.println("Client " + id + " received reply from replicas");
-                        
-                        this.inputLock.lock();
-                        
-                        if (rc.getReqId() == this.lastSeqNumber && this.windowFull) {
-                            
-                            System.out.println("Window of client " + id + " is available");
-                            this.windowFull = false;
-                            this.windowAvailable.signalAll();
-                        }
-                        this.inputLock.unlock();
-                                                
-                    });
-            this.proxy.getCommunicationSystem().setReplyReceiver(this.listener);
-            
+            this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
             rand = new Random(System.nanoTime());
-            
-            this.setName("ProxyThread-"+id);
-            
-            this.thread = new BlockThread(this.id, this.listener);
-            this.thread.start();
-            
+                        
             /*this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 //do nothing
             });*/
@@ -183,7 +176,7 @@ public class TestNodes {
 
                     ByteBuffer buff = ByteBuffer.allocate(size);
                     
-                    buff.putInt(this.id);
+                    buff.putInt(TestNodes.initID);
                     buff.putLong(System.nanoTime());
                     
                     while (buff.hasRemaining()) {
@@ -209,7 +202,21 @@ public class TestNodes {
 
                     Common.Envelope env = builder.build();
             
-                    this.lastSeqNumber = proxy.invokeAsynchRequest(env.toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
+                    this.lastSeqNumber = proxy.invokeAsynchRequest(env.toByteArray(), (RequestContext rc, TOMMessage tomm) -> {
+                        
+                        //System.out.println("Client " + id + " received reply from replicas");
+                        
+                        this.inputLock.lock();
+                        
+                        if (rc.getReqId() == this.lastSeqNumber && this.windowFull) {
+                            
+                            System.out.println("Window of client " + id + " is available");
+                            this.windowFull = false;
+                            this.windowAvailable.signalAll();
+                        }
+                        this.inputLock.unlock();
+                                                
+                    }, TOMMessageType.ORDERED_REQUEST);
                     
                     
                     this.inputLock.lock();
@@ -256,16 +263,18 @@ public class TestNodes {
             while (true) {
 
                 Common.Block block = this.listener.getNext();
-
+                
                 List<ByteString> data = block.getData().getDataList();
-
+                    
                 for (ByteString env : data) {
 
                     try {
 
                         ByteBuffer payload = ByteBuffer.wrap(Common.Envelope.parseFrom(env).getPayload().toByteArray());
 
-                        if (payload.getInt() < 2000) {
+                        int id = payload.getInt();
+                        
+                        if (id == TestNodes.initID) {
 
                             long time = payload.getLong();
 
@@ -273,7 +282,7 @@ public class TestNodes {
 
                             if (latency.getCount() == 100000) {
 
-                                System.out.println("[latency] " + this.id + " // Average = " + this.latency.getAverage(false) / 1000 + " (+/- "+ this.latency.getDP(false) +") us ");
+                                System.out.println("[latency] " + this.id + " // Average = " + (long) this.latency.getAverage(false) / 1000 + " (+/- "+ this.latency.getDP(false) +") us ");
                                 System.out.println("[latency] " + this.id + " // Median  = " + this.latency.getPercentile(0.5) / 1000 + " us ");
                                 System.out.println("[latency] " + this.id + " // 90th p  = " + this.latency.getPercentile(0.9) / 1000 + " us ");
                                 System.out.println("[latency] " + this.id + " // 95th p  = " + this.latency.getPercentile(0.95) / 1000 + " us ");

@@ -81,7 +81,7 @@ public class BFTProxy {
         initID = Integer.parseInt(args[0]);
         
         proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
-        listener = new ProxyReplyListener(proxy.getViewManager(), null);
+        listener = new ProxyReplyListener(proxy.getViewManager());
         
         int recvPort = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);

@@ -44,19 +44,20 @@ public class ProxyReplyListener implements ReplyReceiver {
     private final Lock inputLock;
     private final Condition blockAvailable;
         
-    private ReplyListener controlFlowListener;
-    private Map<Integer, boolean[]> controlFlowReplies;
+    //private ReplyListener controlFlowListener;
+    //private Map<Integer, boolean[]> controlFlowReplies;
         
     private Log logger;
     
-    public ProxyReplyListener(ClientViewController viewManager, ReplyListener controlFlowListener) {
+    public ProxyReplyListener(ClientViewController viewManager/*, ReplyListener controlFlowListener*/) {
         
         logger = LogFactory.getLog(ProxyReplyListener.class);
+        
+        this.next = 0;
         
         this.viewManager = viewManager;
         responses = new ConcurrentHashMap<>();
         replies = new HashMap<>();
-        controlFlowReplies = new HashMap<>();
         replyQuorum = getReplyQuorum();
         
         comparator = (Entry<Common.Block, Common.Metadata[]> o1, Entry<Common.Block, Common.Metadata[]> o2) -> o1.getKey().equals(o2.getKey()) && // compare entire block
@@ -68,7 +69,8 @@ public class ProxyReplyListener implements ReplyReceiver {
         this.inputLock = new ReentrantLock();
         this.blockAvailable = inputLock.newCondition();
             
-        this.controlFlowListener = controlFlowListener;
+        //controlFlowReplies = new HashMap<>();
+        //this.controlFlowListener = controlFlowListener;
     }
     
     @Override
@@ -83,12 +85,12 @@ public class ProxyReplyListener implements ReplyReceiver {
             return;
         }
         
-        if (tomm.getContent().length == 0) { // in case it is the control flow mechanism
+        /*if (tomm.getContent().length == 0) { // in case it is the control flow mechanism
             
             controlFlow(tomm, pos);
             
             return;
-        }
+        }*/
         
         Common.Block response = null;
         
@@ -132,11 +134,11 @@ public class ProxyReplyListener implements ReplyReceiver {
                                         && (comparator.compare(reps[i], reps[pos]) == 0)) {
 
                 sameContent++;
-                if (sameContent >= replyQuorum) {
+                if (sameContent >= replyQuorum) {            
                     response = getBlock(reps, pos);
                     responses.put(tomm.getSequence(), response);
+                    }
                 }
-            }            
             
         }
         
@@ -146,8 +148,7 @@ public class ProxyReplyListener implements ReplyReceiver {
 
     }
 
-    
-    private void controlFlow(TOMMessage tomm, int pos) {
+    /*private void controlFlow(TOMMessage tomm, int pos) {
         
         int sameContent = 1;
         
@@ -173,8 +174,7 @@ public class ProxyReplyListener implements ReplyReceiver {
 
             }
         }
-    }
-    
+    }*/
     
     public Common.Block getNext() {
         
