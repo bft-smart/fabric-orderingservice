@@ -112,7 +112,7 @@ public class TestNodes {
         return blockBuilder.build();
     }
     
-    private class ProxyThread implements Runnable {
+    private class ProxyThread extends Thread {
                 
         int id;
         int payloadSize;
@@ -159,6 +159,7 @@ public class TestNodes {
             
             rand = new Random(System.nanoTime());
             
+            this.setName("ProxyThread-"+id);
             
             this.thread = new BlockThread(this.id, this.listener);
             this.thread.start();
@@ -245,6 +246,8 @@ public class TestNodes {
             this.id = id;
             this.latency = new Storage(100000);
             this.listener = listener;
+            
+            this.setName("BlockThread-"+id);
 
         }
 
