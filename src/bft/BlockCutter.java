@@ -126,4 +126,8 @@ public class BlockCutter {
             Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+    
+    public int size() {
+        return pendingBatch.size();
+    }
 }

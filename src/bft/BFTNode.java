@@ -182,52 +182,52 @@ public class BFTNode extends DefaultRecoverable {
     public byte[] executeSingle(byte[] command, MessageContext msgCtx)  {
                 
         
-        if (command.length == 0 && blockCutter != null && orderers.contains(msgCtx.getSender())) {
+        if (orderers.contains(msgCtx.getSender())) {
             
-            byte[][] batch = blockCutter.cut();
+            if (command.length == 0 && blockCutter != null) {
 
-            if (batch.length > 0) {
+                byte[][] batch = blockCutter.cut();
 
-                assembleAndSend(batch, msgCtx);
+                if (batch.length > 0) {
+
+                    assembleAndSend(batch, msgCtx);
+                }
+
+                logger.debug("Purging blockcutter");
+
             }
-            
-            logger.debug("Purging blockcutter");
 
+            if (msgCtx.getSequence() == 0) {
+
+                if (blockCutter == null) blockCutter = new BlockCutter(command);
+
+            }
+
+            if (msgCtx.getSequence() == 1) {
+
+                if (lastBlockHeader != null) return new byte[0]; 
+
+                Common.BlockHeader header = null;
+                try {
+                    header = Common.BlockHeader.parseFrom(command);
+                    lastBlockHeader = header;
+
+
+                    logger.info("Genesis header number: " + lastBlockHeader.getNumber());
+                    logger.info("Genesis header previous hash: " + Arrays.toString(lastBlockHeader.getPreviousHash().toByteArray()));
+                    logger.info("Genesis header data hash: " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
+                    logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeader)));
+
+                } catch (InvalidProtocolBufferException ex) {
+                    ex.printStackTrace();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+
+            }
             return new byte[0];
         }
         
-        if (msgCtx.getSequence() == 0 && orderers.contains(msgCtx.getSender())) {
-            
-            if (blockCutter == null) blockCutter = new BlockCutter(command);
-            
-            return new byte[0];
-
-        }
-        
-        if (msgCtx.getSequence() == 1 && orderers.contains(msgCtx.getSender())) {
-            
-            if (lastBlockHeader != null) return new byte[0]; 
-            
-            Common.BlockHeader header = null;
-            try {
-                header = Common.BlockHeader.parseFrom(command);
-                lastBlockHeader = header;
-
-                
-                logger.info("Genesis header number: " + lastBlockHeader.getNumber());
-                logger.info("Genesis header previous hash: " + Arrays.toString(lastBlockHeader.getPreviousHash().toByteArray()));
-                logger.info("Genesis header data hash: " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
-                logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeader)));
-                
-            } catch (InvalidProtocolBufferException ex) {
-                ex.printStackTrace();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-            
-            return new byte[0];
-        }
-         
         msgCtx.getFirstInBatch().executedTime = System.nanoTime();
         
         if (envelopeMeasurementStartTime == -1) envelopeMeasurementStartTime = System.currentTimeMillis();
@@ -827,9 +827,36 @@ public class BFTNode extends DefaultRecoverable {
         @Override
         public void manageReply(TOMMessage request, MessageContext msgCtx) {
             
-            if (request.getSequence() % REQUEST_WINDOW == 0) {
+            if (request.getSequence() % REQUEST_WINDOW == 0 && !orderers.contains(request.getSender())) {
+            
+            /*if (blockCutter.size() == 0) {
+                
+                
+
+                int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
+
+                List<Integer> activeWorkers = new LinkedList<>();
+
+                for (Integer c : clients) {
+                    if (!orderers.contains(c)) {
+
+                        activeWorkers.add(c);
+
+                    }
+                }
+
+
+                int[] array = new int[activeWorkers.size()];
+                for (int i = 0; i < array.length; i++) {
+                    array[i] = activeWorkers.get(i);
+                }
+                        
+                        
                 System.out.println("Window of replica " + id + " is available");
+                rc.getServerCommunicationSystem().send(array, request.reply);*/
+
                 rc.getServerCommunicationSystem().send(new int[]{request.getSender()}, request.reply);
+
             }
         }
 
