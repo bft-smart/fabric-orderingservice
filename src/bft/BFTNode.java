@@ -80,7 +80,7 @@ public class BFTNode extends DefaultRecoverable {
     private int paralellism;
     private LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
-    //private BlockThread blockThread;
+    private BlockThread blockThread;
     private final int SIG_LIMIT = 1000;
     private int sigIndex = 0;
     private SignerSenderThread currentSST = null;
@@ -125,8 +125,8 @@ public class BFTNode extends DefaultRecoverable {
             this.executor.execute(new SignerSenderThread(this.queue));
         }
         
-        //this.blockThread = new BlockThread();
-        //this.blockThread.start();
+        this.blockThread = new BlockThread();
+        this.blockThread.start();
 
         this.orderers = new TreeSet<>();
         for (int o : orderers) {
@@ -246,13 +246,13 @@ public class BFTNode extends DefaultRecoverable {
         logger.debug("Envelopes received: " + countEnvelopes);
         
 
-        /*try {
+        try {
             if (blockCutter != null) blockThread.input(command, msgCtx);
         } catch (InterruptedException ex) {
             ex.printStackTrace();
-        }*/
+        }
         
-        List<byte[][]> batches = null;
+        /*List<byte[][]> batches = null;
         try {
             batches = blockCutter.ordered(command);
         } catch (IOException ex) {
@@ -263,7 +263,7 @@ public class BFTNode extends DefaultRecoverable {
         
         for (int i = 0; i < batches.size(); i++) {
             assembleAndSend(batches.get(i), msgCtx);
-        }
+        }*/
         return new byte[0];
         
     }
@@ -593,7 +593,7 @@ public class BFTNode extends DefaultRecoverable {
         return new byte[0];
     }
 
-    /*private class BlockThread extends Thread {
+    private class BlockThread extends Thread {
         
         private LinkedBlockingQueue<Entry<byte[],MessageContext>> envelopes;
         
@@ -606,7 +606,7 @@ public class BFTNode extends DefaultRecoverable {
             
             this.envelopesLock = new ReentrantLock();
             this.notEmptyQueue = envelopesLock.newCondition();
-                }
+        }
                         
         void input (byte[] envelope, MessageContext msgCtx) throws InterruptedException {
             
@@ -666,7 +666,7 @@ public class BFTNode extends DefaultRecoverable {
                 
             }
         }
-    }*/
+    }
     
     private class SignerSenderThread implements Runnable {
         
@@ -743,7 +743,7 @@ public class BFTNode extends DefaultRecoverable {
                         }*/
 
                         byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), dummyConf, tuple.block.getHeader());
+                        //Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), dummyConf, tuple.block.getHeader());
 
                         countSigs++;
 
@@ -759,7 +759,7 @@ public class BFTNode extends DefaultRecoverable {
                         byte[][] contents = new byte[3][];
                         contents[0] = tuple.block.toByteArray();
                         contents[1] = blockSig.toByteArray();
-                        contents[2] = configSig.toByteArray();
+                        contents[2] = blockSig.toByteArray();
 
                         byte[] serialized = serializeContents(contents);
 
