@@ -597,25 +597,25 @@ public class BFTNode extends DefaultRecoverable {
         
         private LinkedBlockingQueue<Entry<byte[],MessageContext>> envelopes;
         
-        private final Lock envelopesLock;
-        private final Condition notEmptyQueue;
+        //private final Lock envelopesLock;
+        //private final Condition notEmptyQueue;
         
         BlockThread () {
             
             this.envelopes = new LinkedBlockingQueue<>();
             
-            this.envelopesLock = new ReentrantLock();
-            this.notEmptyQueue = envelopesLock.newCondition();
+            //this.envelopesLock = new ReentrantLock();
+            //this.notEmptyQueue = envelopesLock.newCondition();
         }
                         
         void input (byte[] envelope, MessageContext msgCtx) throws InterruptedException {
             
-            this.envelopesLock.lock();
+            //this.envelopesLock.lock();
             
             this.envelopes.put(new SimpleEntry(envelope, msgCtx));
             
-            this.notEmptyQueue.signalAll();
-            this.envelopesLock.unlock();
+            //this.notEmptyQueue.signalAll();
+            //this.envelopesLock.unlock();
         }
         
         public void run() {
@@ -626,12 +626,13 @@ public class BFTNode extends DefaultRecoverable {
                 LinkedList<Entry<byte[],MessageContext>> queuedEnvs = new LinkedList();
                 try {
 
-                    this.envelopesLock.lock();
+                    /*this.envelopesLock.lock();
                     if(this.envelopes.isEmpty()) {
                         this.notEmptyQueue.await();
                     }
                     this.envelopes.drainTo(queuedEnvs);
-                    this.envelopesLock.unlock();
+                    this.envelopesLock.unlock();*/
+                    queuedEnvs.add(envelopes.take());
                     
                     for (int i = 0; i < queuedEnvs.size(); i++) {
                         
