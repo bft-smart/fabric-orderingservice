@@ -40,20 +40,27 @@ public class ProxyReplyListener implements ReplyReceiver {
     private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
     private int replyQuorum;
     private int next;
+    private int remainingEnvs;
 
     private final Lock inputLock;
     private final Condition blockAvailable;
+        
+    private Lock[] inputLocks;
+    private Condition[] windowAvailables;
         
     //private ReplyListener controlFlowListener;
     //private Map<Integer, boolean[]> controlFlowReplies;
         
     private Log logger;
     
-    public ProxyReplyListener(ClientViewController viewManager/*, ReplyListener controlFlowListener*/) {
+    public ProxyReplyListener(ClientViewController viewManager, Lock[] inputLocks, Condition[] windowAvailables/*, ReplyListener controlFlowListener*/) {
         
         logger = LogFactory.getLog(ProxyReplyListener.class);
         
         this.next = 0;
+        
+        this.inputLocks = inputLocks;
+        this.windowAvailables = windowAvailables;
         
         this.viewManager = viewManager;
         responses = new ConcurrentHashMap<>();
@@ -134,16 +141,36 @@ public class ProxyReplyListener implements ReplyReceiver {
                                         && (comparator.compare(reps[i], reps[pos]) == 0)) {
 
                 sameContent++;
-                if (sameContent >= replyQuorum) {            
+                if (sameContent >= replyQuorum) {
+                    remainingEnvs = tomm.getReplyServer();  //TODO: getReplyServer is where I am storing the number of remaining envelopes. This eventually needs to go to a proper place. It also needs to be extracted from a quorum and be deterministic.
                     response = getBlock(reps, pos);
                     responses.put(tomm.getSequence(), response);
-                    }
                 }
+            }
             
         }
         
         this.inputLock.lock();
-        if (responses.get(next) != null) this.blockAvailable.signalAll();
+        if (responses.get(next) != null) {
+            
+            this.blockAvailable.signalAll();
+            
+            
+
+            if (this.inputLocks != null && this.windowAvailables != null) {
+
+                for (int j = 0; j < inputLocks.length; j++) {
+
+                    this.inputLocks[j].lock();
+
+                   
+                    if (remainingEnvs <= 10000) this.windowAvailables[j].signalAll();
+
+                    this.inputLocks[j].unlock();
+                }
+
+            }
+        }
         this.inputLock.unlock();
 
     }
@@ -318,5 +345,9 @@ public class ProxyReplyListener implements ReplyReceiver {
         } else {
                 return (int) Math.ceil((viewManager.getCurrentViewN()) / 2) + 1;
         }
+    }
+    
+    public int getRemainingEnvs() {
+        return remainingEnvs;
     }
 }

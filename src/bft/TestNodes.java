@@ -59,9 +59,17 @@ public class TestNodes {
         int delay = Integer.parseInt(args[2]);
         int batch = Integer.parseInt(args[5]);
         
+        Lock[] inputLock = new Lock[clients];
+        Condition[] windowAvailable = new Condition[clients];
+        for (int i = 0; i < clients; i++) {
+            
+            inputLock[i] = new ReentrantLock();
+            windowAvailable[i] = inputLock[i].newCondition();
+        }
+        
         this.proxy = new AsynchServiceProxy(TestNodes.initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         
-        this.listener = new ProxyReplyListener(this.proxy.getViewManager());
+        this.listener = new ProxyReplyListener(this.proxy.getViewManager(), inputLock, windowAvailable);
         this.proxy.getCommunicationSystem().setReplyReceiver(this.listener);
         
         int reqId = this.proxy.invokeAsynchRequest(serializeBatchParams(batch), null, TOMMessageType.ORDERED_REQUEST);
@@ -85,7 +93,7 @@ public class TestNodes {
         
         for (int i = 0; i < clients; i++) {
         
-            this.executor.execute(new ProxyThread(i + TestNodes.initID + 1, Integer.parseInt(args[3]),Boolean.parseBoolean(args[4]), delay));
+            this.executor.execute(new ProxyThread(i + TestNodes.initID + 1, Integer.parseInt(args[3]),Boolean.parseBoolean(args[4]), delay, inputLock[i], windowAvailable[i]));
         
         }
         
@@ -144,14 +152,14 @@ public class TestNodes {
         private Random rand;
         private Storage latency = null;
          
-        public ProxyThread (int id, int payloadSize, boolean addSig, int delay) {
+        public ProxyThread (int id, int payloadSize, boolean addSig, int delay, Lock inputLock, Condition windowAvailable) {
             this.id = id;
             this.payloadSize = payloadSize;
             this.addSig = addSig;
             this.delay = delay;
             
-            this.inputLock = new ReentrantLock();
-            this.windowAvailable = inputLock.newCondition();
+            this.inputLock = inputLock;
+            this.windowAvailable = windowAvailable;
             
             this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
             
@@ -202,29 +210,23 @@ public class TestNodes {
 
                     Common.Envelope env = builder.build();
             
-                    this.lastSeqNumber = proxy.invokeAsynchRequest(env.toByteArray(), (RequestContext rc, TOMMessage tomm) -> {
-                        
-                        //System.out.println("Client " + id + " received reply from replicas");
-                        
-                        this.inputLock.lock();
-                        
-                        if (rc.getReqId() == this.lastSeqNumber && this.windowFull) {
-                            
-                            System.out.println("Window of client " + id + " is available");
-                            this.windowFull = false;
-                            this.windowAvailable.signalAll();
-                        }
-                        this.inputLock.unlock();
-                                                
-                    }, TOMMessageType.ORDERED_REQUEST);
-                    
+                    this.lastSeqNumber = proxy.invokeAsynchRequest(env.toByteArray(), null, TOMMessageType.ORDERED_REQUEST);
                     
                     this.inputLock.lock();
                     
                     if (windowFull) {
                         
                         System.out.println("Window of client " + id + " is full");
-                        this.windowAvailable.awaitUninterruptibly();
+                        
+                        while (listener.getRemainingEnvs() > 10000) {
+                            
+                            try {
+                                this.windowAvailable.awaitNanos(1000);
+                            } catch (InterruptedException ex) {
+                                ex.printStackTrace();
+                            }
+                        }
+                        System.out.println("Window of client " + id + " is available");
                         
                     }
                     
@@ -247,7 +249,7 @@ public class TestNodes {
         private int id;
         private Storage latency = null;
         private ProxyReplyListener listener;
-
+        
         public BlockThread(int id, ProxyReplyListener listener) {
 
             this.id = id;
@@ -263,7 +265,7 @@ public class TestNodes {
             while (true) {
 
                 Common.Block block = this.listener.getNext();
-                
+                                
                 List<ByteString> data = block.getData().getDataList();
                     
                 for (ByteString env : data) {

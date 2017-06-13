@@ -38,8 +38,8 @@ public class BlockCutter {
         
         pendingBatch = new LinkedList<>();
         setBatchParms(bytes);
-    }
-    
+            }
+        
     public List<byte[][]> ordered(byte [] env) throws IOException {
        
         LinkedList batches = new LinkedList<>();

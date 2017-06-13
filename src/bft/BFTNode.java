@@ -190,7 +190,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 if (batch.length > 0) {
 
-                    assembleAndSend(batch, msgCtx);
+                    assembleAndSend(batch, msgCtx, blockThread.remainingEnvelopes());
                 }
 
                 logger.debug("Purging blockcutter");
@@ -268,7 +268,7 @@ public class BFTNode extends DefaultRecoverable {
         
     }
     
-    private void assembleAndSend(byte[][] batch, MessageContext msgCtx) {
+    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, int remainingEnvs) {
         try {
                
             
@@ -295,13 +295,13 @@ public class BFTNode extends DefaultRecoverable {
             
             if (sigIndex % SIG_LIMIT == 0) {
             
-                if (currentSST != null) currentSST.input(null, null, -1);
+                if (currentSST != null) currentSST.input(null, null, -1, remainingEnvs);
                 
                 currentSST = this.queue.take(); // fetch the first SSThread that is idle
             
             } 
 
-            currentSST.input(block, msgCtx, this.sequence);
+            currentSST.input(block, msgCtx, this.sequence, remainingEnvs);
             sigIndex++;
 
             //Runnable SSThread = new SignerSenderThread(block, msgCtx, this.sequence);
@@ -608,6 +608,10 @@ public class BFTNode extends DefaultRecoverable {
             //this.notEmptyQueue = envelopesLock.newCondition();
         }
                         
+        public int remainingEnvelopes() {
+            return this.envelopes.size();
+        }
+        
         void input (byte[] envelope, MessageContext msgCtx) throws InterruptedException {
             
             //this.envelopesLock.lock();
@@ -643,7 +647,7 @@ public class BFTNode extends DefaultRecoverable {
 
                             if (batch.length > 0) {
 
-                                assembleAndSend(batch, queuedEnvs.get(i).getValue());
+                                assembleAndSend(batch, queuedEnvs.get(i).getValue(), envelopes.size());
                             }
 
                             logger.debug("Purging blockcutter");
@@ -656,7 +660,7 @@ public class BFTNode extends DefaultRecoverable {
                         
                         for (int j = 0; j < batches.size(); j++) {
                             
-                            assembleAndSend(batches.get(j), queuedEnvs.get(i).getValue());
+                            assembleAndSend(batches.get(j), queuedEnvs.get(i).getValue(), envelopes.size());
                         }
                     }
 
@@ -690,11 +694,11 @@ public class BFTNode extends DefaultRecoverable {
             this.queue.put(this);
         }
 
-        public void input(Common.Block block, MessageContext msgContext, int seq) throws InterruptedException {
+        public void input(Common.Block block, MessageContext msgContext, int seq, int remainingEnvs) throws InterruptedException {
             
             this.inputLock.lock();
             
-            this.input.put(new BFTTuple(block, msgContext, seq));
+            this.input.put(new BFTTuple(block, msgContext, seq, remainingEnvs));
             
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
@@ -774,6 +778,9 @@ public class BFTNode extends DefaultRecoverable {
                                 replica.getReplicaContext().getCurrentView().getId(),
                                 tuple.msgContext.getType());
 
+                        //TODO: getReplyServer is where I am storing the number of remaining envelopes. This eventually needs to go to a proper place
+                        reply.setReplyServer(tuple.remainingEnvs);
+                        
 
                         int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
 
@@ -811,13 +818,14 @@ public class BFTNode extends DefaultRecoverable {
         Common.Block block = null;
         MessageContext msgContext = null;
         int sequence = -1;
+        int remainingEnvs = -1;
         
-        BFTTuple (Common.Block block, MessageContext msgCtx, int sequence) {
+        BFTTuple (Common.Block block, MessageContext msgCtx, int sequence, int remainingEnvs) {
             
             this.block = block;
             this.msgContext = msgCtx;
             this.sequence = sequence;
-            
+            this.remainingEnvs = remainingEnvs;
         }
     }
     
@@ -828,37 +836,11 @@ public class BFTNode extends DefaultRecoverable {
         @Override
         public void manageReply(TOMMessage request, MessageContext msgCtx) {
             
-            if (request.getSequence() % REQUEST_WINDOW == 0 && !orderers.contains(request.getSender())) {
+            /*if (request.getSequence() % REQUEST_WINDOW == 0 && !orderers.contains(request.getSender())) {
             
-            /*if (blockCutter.size() == 0) {
-                
-                
-
-                int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
-
-                List<Integer> activeWorkers = new LinkedList<>();
-
-                for (Integer c : clients) {
-                    if (!orderers.contains(c)) {
-
-                        activeWorkers.add(c);
-
-                    }
-                }
-
-
-                int[] array = new int[activeWorkers.size()];
-                for (int i = 0; i < array.length; i++) {
-                    array[i] = activeWorkers.get(i);
-                }
-                        
-                        
-                System.out.println("Window of replica " + id + " is available");
-                rc.getServerCommunicationSystem().send(array, request.reply);*/
-
                 rc.getServerCommunicationSystem().send(new int[]{request.getSender()}, request.reply);
 
-            }
+            }*/
         }
 
         @Override
