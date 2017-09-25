@@ -15,7 +15,7 @@ echo "Launching replier #"$ID" with "$WORKERS" workers"
 CMD="java -cp dist/BFT-Proxy.jar:lib/* bft.TestNodes "$ID" "$WORKERS" "$DELAY" "$SIZE" "$SIGS" "$BATCH""
 $CMD &
 
-if [ $ID -eq 1000 ]
+if [ $ID -eq $INITID ]
 then
   sleep 3
 fi
