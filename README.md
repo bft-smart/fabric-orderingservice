@@ -15,3 +15,5 @@ To locally run the ordering service with 4 nodes, execute the commands bellow in
 5) Run 'orderer/orderer'
 6) Run 'orderer/sample_clients/deliver_stdout/deliver_stdout'
 7) Run 'orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --secure --messages [number of messages to send]'
+
+For more information regarding this project, read the technical report available at  http://arxiv.org/abs/1709.06921
