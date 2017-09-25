@@ -14,4 +14,4 @@ To locally run the ordering service with 4 nodes, execute the commands bellow in
 4) Execute 'go build'  at directories 'orderer/', 'orderer/sample_clients/deliver_stdout', and 'orderer/sample_clients/broadcast_timestamp/'
 5) Run 'orderer/orderer'
 6) Run 'orderer/sample_clients/deliver_stdout/deliver_stdout'
-7) Run 'orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --secure --messages <number of messages to send>'
+7) Run 'orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --secure --messages [number of messages to send]'
