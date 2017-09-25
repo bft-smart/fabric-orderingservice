@@ -10,7 +10,7 @@ To locally run the ordering service with 4 nodes, execute the commands bellow in
 
 1) In the main directory of this repository, run 'launch4Replicas.sh'
 2) Still in the same directory, run 'launchProxy.sh'.
-3) Change to '<gocode directory>/src/github.com/hyperledger/fabric' (of the HLF fork)
+3) Change to '[gocode directory]/src/github.com/hyperledger/fabric' (of the HLF fork)
 4) Execute 'go build'  at directories 'orderer/', 'orderer/sample_clients/deliver_stdout', and 'orderer/sample_clients/broadcast_timestamp/'
 5) Run 'orderer/orderer'
 6) Run 'orderer/sample_clients/deliver_stdout/deliver_stdout'
