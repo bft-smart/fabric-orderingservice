@@ -6,7 +6,7 @@ This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.0. It als
 
 Before compilng, make sure to switch to the 'zeromq' branch, both for this repository and for the aforementioned HLF fork. Because the code for these braches require the zeromq framework, it is also needed to install in the system all the dependencies for libraries goczmq (used by the HLF fork) and jzmq (used in this repository). Execute 'ant' in the main directory to compile the code. The HLF fork can be compile as usual.
 
-To locally run the ordering service with 4 nodes, execute the following commands in the following order:
+To locally run the ordering service with 4 nodes, execute the commands bellow in the following order:
 
 1) In the main directory of this repository, run 'launch4Replicas.sh'
 2) Still in the same directory, run 'launchProxy.sh'.
