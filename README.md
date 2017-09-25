@@ -1,6 +1,6 @@
 # hyperledger-bftsmart
 
-This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric v1.0. This BFT ordering service is a wrapper around BFT-SMaRt (https://github.com/bft-smart/library) a Java written, open source BFT libraries maintained by University of Lisbon.
+This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric v1.0. This BFT ordering service is a wrapper around BFT-SMaRt (https://github.com/bft-smart/library) a Java written, open source BFT library maintained by the University of Lisbon.
 
 This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.0. It also requires the HLF fork repository available at https://github.com/jcs47/fabric
 
