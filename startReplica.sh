@@ -1,2 +1,2 @@
 #!/bin/bash
-java -cp dist/BFT-Proxy.jar:dist/* bft.BFTNode $@
+java -cp dist/BFT-Proxy.jar:lib/* bft.BFTNode $@

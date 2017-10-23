@@ -19,6 +19,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hyperledger.fabric.protos.common.Common;
@@ -35,6 +38,9 @@ public class ProxyReplyListener implements ReplyReceiver {
     private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
     private int replyQuorum;
     private int next;
+    
+    private final Lock inputLock;
+    private final Condition blockAvailable;
             
     private Log logger;
     
@@ -53,10 +59,13 @@ public class ProxyReplyListener implements ReplyReceiver {
                 ? 0 : -1 //TODO: compare the signature values too
 
         ;
+        
+        this.inputLock = new ReentrantLock();
+        this.blockAvailable = inputLock.newCondition();
     }
     
     @Override
-    public synchronized void replyReceived(TOMMessage tomm) {            
+    public void replyReceived(TOMMessage tomm) {            
 
         logger.debug("Replica " + tomm.getSender());
         logger.debug("Sequence " + tomm.getSequence());
@@ -115,21 +124,24 @@ public class ProxyReplyListener implements ReplyReceiver {
             }
         }
         
-        if (responses.get(next) != null) notifyAll();
+        this.inputLock.lock();
+        if (responses.get(next) != null) this.blockAvailable.signalAll();
+        this.inputLock.unlock();
 
     }
 
-    public synchronized Common.Block getNext() {
+    public Common.Block getNext() {
         
         Common.Block ret = null;
+        
+        this.inputLock.lock();
         while ((ret = responses.get(next)) == null) {
-            try {
-                wait();
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-            }
+            
+            this.blockAvailable.awaitUninterruptibly();
             
         }
+        this.inputLock.unlock();
+
         next++;
         
         return ret;

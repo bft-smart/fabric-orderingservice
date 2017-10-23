@@ -6,6 +6,9 @@
 package bft;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
@@ -32,6 +35,14 @@ public class BlockCutter {
     
     private Log logger;
 
+    public BlockCutter() { //used for state transfer
+        
+        logger = LogFactory.getLog(BlockCutter.class);
+        
+        pendingBatch = new LinkedList<>();
+        
+    }
+    
     public BlockCutter(byte [] bytes) {
         
         logger = LogFactory.getLog(BlockCutter.class);
@@ -124,5 +135,65 @@ public class BlockCutter {
         } catch (IOException ex) {
             Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
         }
+    }
+    
+    public byte[] serialize() throws IOException {
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bos);
+                
+        out.writeInt(pendingBatch.size());
+
+        out.flush();
+        bos.flush();
+        for (int i = 0; i < pendingBatch.size(); i++) {
+
+            out.writeInt(pendingBatch.get(i).length);
+
+            out.write(pendingBatch.get(i));
+
+            out.flush();
+            bos.flush();
+        }
+        
+        out.writeLong(PreferredMaxBytes);
+        out.writeLong(MaxMessageCount);
+        out.writeInt(pendingBatchSizeBytes);
+
+        out.flush();
+        bos.flush();
+            
+        out.close();
+        bos.close();
+        return bos.toByteArray();
+
+    }
+    
+    public void deserialize(byte[] bytes) throws IOException {
+        
+        pendingBatch = new LinkedList<>();
+        
+        ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+        DataInputStream in = new DataInputStream(bis);
+        int nEnvs =  in.readInt();
+        
+        for (int i = 0; i < nEnvs; i++) {
+            
+            int length = in.readInt();
+
+            byte[] env = new byte[length];
+            in.read(env);
+            
+            pendingBatch.add(env);
+        }
+        
+        PreferredMaxBytes = in.readLong();
+        MaxMessageCount = in.readLong();
+        pendingBatchSizeBytes = in.readInt();
+        
+        in.close();
+        bis.close();
+ 
+        
     }
 }

@@ -10,8 +10,6 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import com.etsy.net.JUDS;
 import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -20,6 +18,9 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -73,7 +74,7 @@ public class BFTProxy {
     public static void main(String args[]) {
 
         if(args.length < 3) {
-            System.out.println("Use: java BFTNode <proxy id> <recv port> <send port>");
+            System.out.println("Use: java BFTNode <proxy id> <pool size> <send port>");
             System.exit(-1);
         }    
         
@@ -83,13 +84,19 @@ public class BFTProxy {
         proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
         listener = new ProxyReplyListener(proxy.getViewManager());
         
-        int recvPort = Integer.parseInt(args[1]);
+        int pool = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);
         
         proxy.getCommunicationSystem().setReplyReceiver(listener);
 
         try {
-            recvServer = new  UnixDomainSocketServer("/tmp/bft.sock", JUDS.SOCK_STREAM, 10);
+            
+            logger.info("Creating UNIX socket...");
+            
+            Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "bft.sock");
+            
+            Files.deleteIfExists(p);
+            recvServer = new  UnixDomainSocketServer(p.toString(), JUDS.SOCK_STREAM, pool);
             sendServer = new ServerSocket(sendPort);
         } catch (IOException e) {
             e.printStackTrace();
@@ -257,7 +264,8 @@ public class BFTProxy {
                 //CommonProtos.Envelope env = CommonProtos.Envelope.parseFrom(bytes);
                 //logger.debug("Envelope Payload" + Arrays.toString(env.getPayload().toByteArray()));
 
-                this.out.invokeAsynchRequest(bytes, null, TOMMessageType.ORDERED_REQUEST);
+                int reqId = this.out.invokeAsynchRequest(bytes, null, TOMMessageType.ORDERED_REQUEST);
+                this.out.cleanAsynchRequest(reqId);
 
                 if (envelopeMeasurementStartTime == -1) {
                     envelopeMeasurementStartTime = System.currentTimeMillis();
@@ -321,7 +329,8 @@ public class BFTProxy {
         @Override
         public void run() {
             
-            proxy.invokeAsynchRequest(new byte[0], null, TOMMessageType.ORDERED_REQUEST);
+            int reqId = proxy.invokeAsynchRequest(new byte[0], null, TOMMessageType.ORDERED_REQUEST);
+            proxy.cleanAsynchRequest(reqId);
             
             timer = new Timer();
             timer.schedule(new BatchTimeout(), (BatchTimeout / 1000000));
