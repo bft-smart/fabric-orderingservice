@@ -100,8 +100,7 @@ public class BFTNode extends DefaultRecoverable {
 
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
         this.id = id;
-        this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
-
+        
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
 
@@ -128,9 +127,11 @@ public class BFTNode extends DefaultRecoverable {
 
         logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
         logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
+        
+        this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
 
     }
-
+    
     public static void main(String[] args) throws Exception {
 
         if (args.length < 5) {
@@ -149,8 +150,6 @@ public class BFTNode extends DefaultRecoverable {
     public void installSnapshot(byte[] state) {
         
         try {
-            blockCutter = new BlockCutter();
-            orderers = new TreeSet<Integer>();
             
             ByteArrayInputStream bis = new ByteArrayInputStream(state);
             DataInputStream in = new DataInputStream(bis);
@@ -159,22 +158,36 @@ public class BFTNode extends DefaultRecoverable {
             
             int n = in.readInt();
             
+            orderers = new TreeSet<Integer>();
+
             for (int i = 0; i < n; i++) {
                 
                 orderers.add(new Integer(in.readInt()));
             }
             
+            lastBlockHeader = null;
             n = in.readInt();
-            byte[] b = new byte[n];
-            in.read(b);
             
-            lastBlockHeader = Common.BlockHeader.parseFrom(b);
+            if (n > 0) {
+                
+                byte[] b = new byte[n];
+                in.read(b);
+                
+                lastBlockHeader = Common.BlockHeader.parseFrom(b);
+            }
             
+            blockCutter = null;
             n = in.readInt();
-            b = new byte[n];
-            in.read(b);
             
-            blockCutter.deserialize(b);
+            if (n > 0) {
+            
+                byte[] b = new byte[n];
+                in.read(b);
+                            
+                blockCutter = new BlockCutter();
+                blockCutter.deserialize(b);
+            }
+            
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -194,9 +207,9 @@ public class BFTNode extends DefaultRecoverable {
                 a = new Integer[0];
             }
             
-            byte[] b = (lastBlockHeader != null ? lastBlockHeader.toByteArray() : Common.BlockHeader.getDefaultInstance().toByteArray());
+            byte[] b = (lastBlockHeader != null ? lastBlockHeader.toByteArray() : new byte[0]);
             
-            byte[] c = (blockCutter != null ? blockCutter.serialize() : (new BlockCutter()).serialize());
+            byte[] c = (blockCutter != null ? blockCutter.serialize() : new byte[0]);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bos);
@@ -218,12 +231,12 @@ public class BFTNode extends DefaultRecoverable {
             }
             
             out.writeInt(b.length);
-            out.write(b);
+            if (b.length > 0) out.write(b);
             out.flush();
             bos.flush();
             
             out.writeInt(c.length);
-            out.write(c);
+            if (c.length > 0) out.write(c);
             out.flush();
             bos.flush();
             
@@ -357,6 +370,9 @@ public class BFTNode extends DefaultRecoverable {
             }
 
             this.lastBlockHeader = block.getHeader();
+            
+            if ((lastBlockHeader.getNumber() % 100) == 0)
+                 System.out.println("Genesis header hash for header #" + lastBlockHeader.getNumber() + ": " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
 
             //optimization to parellise signatures and sending
             if (sigIndex % SIG_LIMIT == 0) {
