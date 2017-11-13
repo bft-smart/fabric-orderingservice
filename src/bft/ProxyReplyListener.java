@@ -5,14 +5,15 @@
  */
 package bft;
 
-import bftsmart.communication.client.ReplyReceiver;
-import bftsmart.reconfiguration.ClientViewController;
+import bftsmart.reconfiguration.views.View;
+import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;
+import bftsmart.tom.core.messages.TOMMessageType;
+import bftsmart.tom.util.Extractor;
+import bftsmart.tom.util.TOMUtil;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectInputStream;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -30,25 +31,42 @@ import org.hyperledger.fabric.protos.common.Common;
  *
  * @author joao
  */
-public class ProxyReplyListener implements ReplyReceiver {
+public class ProxyReplyListener extends AsynchServiceProxy {
 
     private Map<Integer, Entry<Common.Block, Common.Metadata[]>[]> replies;
     private Map<Integer, Common.Block> responses;
-    private ClientViewController viewManager;
     private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
     private int replyQuorum;
     private int next;
     
-    private final Lock inputLock;
-    private final Condition blockAvailable;
-            
+    private Lock inputLock;
+    private Condition blockAvailable;
+                
     private Log logger;
     
-    public ProxyReplyListener(ClientViewController viewManager) {
+    //used to detected updates to the view
+    private int nextView;
+    private View[] views;
         
+    public ProxyReplyListener(int id) {
+        super(id);
+        init();
+    }
+    
+    public ProxyReplyListener(int id, String configHome) {
+        super(id, configHome);
+        init();
+    }
+    
+    public ProxyReplyListener(int id, String configHome,
+            Comparator<byte[]> replyComparator, Extractor replyExtractor) {
+        super(id, configHome, replyComparator, replyExtractor);
+        init();
+    }
+    
+    private void init() {
         logger = LogFactory.getLog(ProxyReplyListener.class);
         
-        this.viewManager = viewManager;
         responses = new ConcurrentHashMap<>();
         replies = new HashMap<>();
         replyQuorum = getReplyQuorum();
@@ -62,35 +80,103 @@ public class ProxyReplyListener implements ReplyReceiver {
         
         this.inputLock = new ReentrantLock();
         this.blockAvailable = inputLock.newCondition();
+        
+        nextView = getViewManager().getCurrentViewId();
+        views = new View[getViewManager().getCurrentViewN()];
+    }
+    
+    private View newView(byte[] bytes) {
+        
+        Object o = TOMUtil.getObject(bytes);
+        return (o != null && o instanceof View ? (View) o : null);
     }
     
     @Override
-    public void replyReceived(TOMMessage tomm) {            
-
+    public void replyReceived(TOMMessage tomm) {
+        
         logger.debug("Replica " + tomm.getSender());
         logger.debug("Sequence " + tomm.getSequence());
+                
+        View v = null;
+        
+        try {
+
+            canReceiveLock.lock();
+            
+            if ((v = newView(tomm.getContent())) != null) {
+            
+                processReplyView(tomm, v);
+                
+            } else {
+                
+                processReplyBlock(tomm);
+            }
+
+        }
+        finally {
+            
+            canReceiveLock.unlock();
+
+        }
+    }
+
+    private void processReplyView (TOMMessage tomm, View v) {
+                        
+        int sameContent = 1;
+
+        int pos = getViewManager().getCurrentViewPos(tomm.getSender());
+
+        views[pos] = v;
+
+        for (int i = 0; i < views.length; i++) {
+
+            if ((views[i] != null) && (i != pos || getViewManager().getCurrentViewN() == 1)
+                                && (tomm.getReqType() != TOMMessageType.ORDERED_REQUEST || views[i].equals(v))) {
+
+                sameContent++;
+
+            }
+        }
+
+        if (sameContent >= replyQuorum && v.getId() > getViewManager().getCurrentViewId()) {
+
+            System.out.println("Updating ProxyListener to view " + v.getId());
+
+            reconfigureTo(v);
+
+            replyQuorum = getReplyQuorum();
+
+            views = new View[getViewManager().getCurrentViewN()];
+
+            // this message is sent again to make all replicas not from the previous view aware of the client
+            askForView();
+        }
+        
+    }
+    
+    private void processReplyBlock (TOMMessage tomm) {
         
         Common.Block response = null;
-        
+
         if (tomm.getSequence() < next) { // ignore replies that no longer matter
-            
+
             replies.remove(tomm.getSequence());
             responses.remove(tomm.getSequence());
             return;
         }
-        int pos = viewManager.getCurrentViewPos(tomm.getSender());
+        int pos = getViewManager().getCurrentViewPos(tomm.getSender());
 
         if (pos < 0) { //ignore messages that don't come from replicas
             return;
         }
-                
+
         if (replies.get(tomm.getSequence()) == null) //avoid nullpointer exception
-            replies.put(tomm.getSequence(), new Entry[viewManager.getCurrentViewN()]);
-        
+            replies.put(tomm.getSequence(), new Entry[getViewManager().getCurrentViewN()]);
+
         byte[][] contents = null;
         Common.Block block = null;
         Common.Metadata metadata[] = new Common.Metadata[2];
-        
+
         try {
             contents = deserializeContents(tomm.getContent());
             if (contents == null || contents.length < 3) return;
@@ -104,32 +190,61 @@ public class ProxyReplyListener implements ReplyReceiver {
             ex.printStackTrace();
             return;
         }
-        
+
         Entry[] reps = replies.get(tomm.getSequence());
-        
+
         reps[pos] = new SimpleEntry<>(block,metadata);
 
         int sameContent = 1;
-      
+
         for (int i = 0; i < reps.length; i++) {
-            
-            if ((i != pos || viewManager.getCurrentViewN() == 1) && reps[i] != null
-					&& (comparator.compare(reps[i], reps[pos]) == 0)) {
-                                        
+
+            if ((i != pos || getViewManager().getCurrentViewN() == 1) && reps[i] != null
+                                        && (comparator.compare(reps[i], reps[pos]) == 0)) {
+
                 sameContent++;
                 if (sameContent >= replyQuorum) {
                     response = getBlock(reps, pos);
                     responses.put(tomm.getSequence(), response);
+
+                    if (tomm.getViewID() > nextView) {
+
+                        nextView = tomm.getViewID();
+                        views = new View[getViewManager().getCurrentViewN()];
+
+                        // this is needed to fetch the current view from the replicas
+                        askForView();
+
+                    }
+
                 }
             }
         }
-        
+
         this.inputLock.lock();
         if (responses.get(next) != null) this.blockAvailable.signalAll();
         this.inputLock.unlock();
-
+        
     }
+    
+    private void askForView() {
+        
+        Thread t = new Thread() {
 
+            @Override
+            public void run() {
+
+                invokeAsynchRequest("GETVIEW".getBytes(), getViewManager().getCurrentViewProcesses(),
+                        null, TOMMessageType.ORDERED_REQUEST);
+
+            }
+
+        };
+
+        t.start();
+                        
+    }
+    
     public Common.Block getNext() {
         
         Common.Block ret = null;
@@ -145,33 +260,6 @@ public class ProxyReplyListener implements ReplyReceiver {
         next++;
         
         return ret;
-    }
-            
-    private byte[] getSerializedBlock(byte[] contents) {
-
-        try {
-            byte[] block = null;
-
-            ByteArrayInputStream bis = new ByteArrayInputStream(contents);
-            ObjectInput in = new ObjectInputStream(bis);
-            int nContents = in.readInt();
-            if (nContents < 1) {
-                block = new byte[0];
-            } else {
-                int length = in.readInt();
-                block = new byte[length];
-                in.read(block);
-            }
-
-            in.close();
-            bis.close();
-
-            return block;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return new byte[0];
-        }
-
     }
                            
     private Common.Block getBlock(Entry<Common.Block, Common.Metadata[]>[] replies, int lastReceived) {
@@ -246,25 +334,5 @@ public class ProxyReplyListener implements ReplyReceiver {
  
         
         return batch;
-    }
-        
-    private int receivedReplies(TOMMessage[] replies) {
-        
-        int count = 0;
-        
-        for (int i = 0; i < replies.length; i++)
-            if (replies[i] != null) count++;
-            
-        return count;
-    }
-    
-    private int getReplyQuorum() {
-        
-        if (viewManager.getStaticConf().isBFT()) {
-                return (int) Math.ceil((viewManager.getCurrentViewN()
-                                + viewManager.getCurrentViewF()) / 2) + 1;
-        } else {
-                return (int) Math.ceil((viewManager.getCurrentViewN()) / 2) + 1;
-        }
     }
 }

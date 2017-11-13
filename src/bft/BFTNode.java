@@ -6,11 +6,10 @@
 package bft;
 
 import bftsmart.tom.MessageContext;
-import bftsmart.tom.ReplicaContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.core.messages.TOMMessage;
-import bftsmart.tom.server.Replier;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
+import bftsmart.tom.server.defaultservices.DefaultReplier;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.BufferedReader;
@@ -35,6 +34,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -91,6 +91,10 @@ public class BFTNode extends DefaultRecoverable {
     private int countEnvelopes = 0;
     private int countBlocks = 0;
     private int countSigs = 0;
+    
+    //used to avoid the signing threads from accessing a null pointer in 'replica'
+    private Lock replicaLock;
+    private Condition replicaReady;
 
     //these attributes are the state of this replicated state machine
     private Set<Integer> orderers;
@@ -99,6 +103,10 @@ public class BFTNode extends DefaultRecoverable {
     private Common.BlockHeader lastBlockHeader; //blockchain related
 
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
+
+        this.replicaLock = new ReentrantLock();
+        this.replicaReady = replicaLock.newCondition();
+
         this.id = id;
         
         this.crypto = new CryptoPrimitives();
@@ -129,9 +137,13 @@ public class BFTNode extends DefaultRecoverable {
         logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
         
         this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
-
+        
+        this.replicaLock.lock();
+        this.replicaReady.signalAll();
+        this.replicaLock.unlock();
+        
     }
-    
+
     public static void main(String[] args) throws Exception {
 
         if (args.length < 5) {
@@ -253,22 +265,28 @@ public class BFTNode extends DefaultRecoverable {
     }
 
     @Override
-    public byte[][] appExecuteBatch(byte[][] commands, MessageContext[] msgCtxs) {
+    public byte[][] appExecuteBatch(byte[][] commands, MessageContext[] msgCtxs, boolean fromConsensus) {
 
         byte[][] replies = new byte[commands.length][];
         for (int i = 0; i < commands.length; i++) {
             if (msgCtxs != null && msgCtxs[i] != null) {
 
-                replies[i] = executeSingle(commands[i], msgCtxs[i]);
+                replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
             }
         }
 
         return replies;
     }
 
-    private byte[] executeSingle(byte[] command, MessageContext msgCtx) {
+    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) {
 
         if (orderers.contains(msgCtx.getSender())) {
+            
+            if (Arrays.equals("GETVIEW".getBytes(), command)) {
+                
+                System.out.println("A proxy is trying to fetch the most current view");
+                return new byte[0];
+            }
 
             if (command.length == 0 && blockCutter != null) {
 
@@ -276,7 +294,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 if (batch.length > 0) {
 
-                    assembleAndSend(batch, msgCtx);
+                    assembleAndSend(batch, msgCtx, fromConsensus);
                 }
 
                 logger.debug("Purging blockcutter");
@@ -339,18 +357,19 @@ public class BFTNode extends DefaultRecoverable {
             ex.printStackTrace();
         }
 
-        if (batches == null) {
-            return new byte[0];
+        if (batches != null) {
+        
+            for (int i = 0; i < batches.size(); i++) {
+                assembleAndSend(batches.get(i), msgCtx, fromConsensus);
+            }
+        
         }
-
-        for (int i = 0; i < batches.size(); i++) {
-            assembleAndSend(batches.get(i), msgCtx);
-        }
-        return new byte[0];
+        
+        return "ACK".getBytes();
 
     }
 
-    private void assembleAndSend(byte[][] batch, MessageContext msgCtx) {
+    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus) {
         try {
 
             if (blockMeasurementStartTime == -1) {
@@ -375,19 +394,22 @@ public class BFTNode extends DefaultRecoverable {
                  System.out.println("Genesis header hash for header #" + lastBlockHeader.getNumber() + ": " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
 
             //optimization to parellise signatures and sending
-            if (sigIndex % SIG_LIMIT == 0) {
+            if (fromConsensus) { //if this is from the state transfer, there is no point in signing and sending yet again
+                
+                if (sigIndex % SIG_LIMIT == 0) {
 
-                if (currentSST != null) {
-                    currentSST.input(null, null, -1);
+                    if (currentSST != null) {
+                        currentSST.input(null, null, -1);
+                    }
+
+                    currentSST = this.queue.take(); // fetch the first SSThread that is idle
+
                 }
 
-                currentSST = this.queue.take(); // fetch the first SSThread that is idle
-
+                currentSST.input(block, msgCtx, this.sequence);
+                sigIndex++;
             }
-
-            currentSST.input(block, msgCtx, this.sequence);
-            sigIndex++;
-
+            
             //Runnable SSThread = new SignerSenderThread(block, msgCtx, this.sequence);
             //this.executor.execute(SSThread);
             this.sequence++; // because of parelisation, I need to increment the sequence number in this method
@@ -765,10 +787,17 @@ public class BFTNode extends DefaultRecoverable {
                                 tuple.sequence, //change sequence because the message is going to be received by all clients, not just the original sender
                                 tuple.msgContext.getOperationId(),
                                 serialized,
-                                replica.getReplicaContext().getCurrentView().getId(),
+                                tuple.msgContext.getViewID(),
                                 tuple.msgContext.getType());
 
-                        int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
+                        while (replica == null) {
+                            
+                            replicaLock.lock();
+                            replicaReady.await(1000, TimeUnit.MILLISECONDS);
+                            replicaLock.lock();
+                        }
+                        
+                        int[] clients = replica.getServerCommunicationSystem().getClientsConn().getClients();
 
                         List<Integer> activeOrderers = new LinkedList<>();
 
@@ -784,8 +813,8 @@ public class BFTNode extends DefaultRecoverable {
                         for (int i = 0; i < array.length; i++) {
                             array[i] = activeOrderers.get(i);
                         }
-
-                        replica.getReplicaContext().getServerCommunicationSystem().send(array, reply);
+                        
+                        replica.getServerCommunicationSystem().send(array, reply);
 
                     }
 
@@ -812,16 +841,13 @@ public class BFTNode extends DefaultRecoverable {
         }
     }
 
-    private class NoopReplier implements Replier {
-
-        @Override
-        public void setReplicaContext(ReplicaContext rc) {
-            //nothing
-        }
+    private class NoopReplier extends DefaultReplier {
 
         @Override
         public void manageReply(TOMMessage tomm, MessageContext mc) {
-            //nothing
+            
+            if (!orderers.contains(tomm.getSender()))
+                super.manageReply(tomm, mc);
         }
 
     }
