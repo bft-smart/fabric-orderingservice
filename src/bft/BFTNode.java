@@ -45,6 +45,7 @@ import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OutputStream;
 import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
@@ -102,7 +103,7 @@ public class BFTNode extends DefaultRecoverable {
     private int sequence = 0;
     private Common.BlockHeader lastBlockHeader; //blockchain related
 
-    public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
+    public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
 
         this.replicaLock = new ReentrantLock();
         this.replicaReady = replicaLock.newCondition();
@@ -133,8 +134,8 @@ public class BFTNode extends DefaultRecoverable {
             this.orderers.add(o);
         }
 
-        logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
-        logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
+        //logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
+        //logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
         
         this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
         
@@ -562,7 +563,7 @@ public class BFTNode extends DefaultRecoverable {
         byte[][] concat = {plaintext, sigHeader.toByteString().toByteArray(), encodeBlockHeaderASN1(blockHeader)};
 
         //byte[] sig = sign(concatenate(concat));
-        byte[] sig = crypto.ecdsaSignToBytes(privKey, concatenate(concat));
+        byte[] sig = crypto.sign(privKey, concatenate(concat));
 
         logger.debug("Signature for block #" + blockHeader.getNumber() + ": " + Arrays.toString(sig) + "\n");
 
@@ -649,19 +650,29 @@ public class BFTNode extends DefaultRecoverable {
     private PrivateKey getPemPrivateKey(String filename) throws IOException {
 
         BufferedReader br = new BufferedReader(new FileReader(filename));
-        //Security.addProvider(new BouncyCastleProvider());
-        PEMParser pp = new PEMParser(br);
-        PEMKeyPair pemKeyPair = (PEMKeyPair) pp.readObject();
 
-        KeyPair kp = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
+        PEMParser pp = new PEMParser(br);
+        Object obj = pp.readObject();
+        
         pp.close();
         br.close();
+        
+        if (obj instanceof PrivateKeyInfo) {
+        
+            PrivateKeyInfo keyInfo = (PrivateKeyInfo) obj;
+            return (new JcaPEMKeyConverter().getPrivateKey(keyInfo));
+        
+        } else {
+            
+            PEMKeyPair pemKeyPair = (PEMKeyPair) obj;
 
-        return kp.getPrivate();
-        //samlResponse.sign(Signature.getInstance("SHA1withRSA").toString(), kp.getPrivate(), certs);
+            KeyPair kp = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
+            return kp.getPrivate();
+
+        }
 
     }
-
+    
     private void parseCertificate(String filename) throws IOException {
 
         BufferedReader br = new BufferedReader(new FileReader(filename));

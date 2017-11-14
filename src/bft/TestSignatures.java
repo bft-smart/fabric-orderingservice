@@ -64,7 +64,7 @@ public class TestSignatures {
     private static int interval;
     private static int countSigs = 0;
     
-    public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException {
+    public static void main(String[] args) throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
         
         
         if(args.length < 7) {
@@ -380,7 +380,7 @@ public class TestSignatures {
             byte[][] concat  = {plaintext, sigHeader.toByteString().toByteArray(), encodeBlockHeaderASN1(blockHeader)};
 
             //byte[] sig = sign(concatenate(concat));
-            byte[] sig = crypto.ecdsaSignToBytes(privKey, concatenate(concat));
+            byte[] sig = crypto.sign(privKey, concatenate(concat));
 
             //parseSig(sig);
 
