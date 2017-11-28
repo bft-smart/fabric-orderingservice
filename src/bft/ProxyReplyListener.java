@@ -33,9 +33,9 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class ProxyReplyListener extends AsynchServiceProxy {
 
-    private Map<Integer, Entry<Common.Block, Common.Metadata[]>[]> replies;
-    private Map<Integer, Common.Block> responses;
-    private Comparator<Entry<Common.Block, Common.Metadata[]>> comparator;
+    private Map<Integer, ReplyTuple[]> replies;
+    private Map<Integer, Entry<String, Common.Block>> responses;
+    private Comparator<ReplyTuple> comparator;
     private int replyQuorum;
     private int next;
     
@@ -71,10 +71,12 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         replies = new HashMap<>();
         replyQuorum = getReplyQuorum();
         
-        comparator = (Entry<Common.Block, Common.Metadata[]> o1, Entry<Common.Block, Common.Metadata[]> o2) -> o1.getKey().equals(o2.getKey()) && // compare entire block
-                o1.getValue()[0].getValue().equals(o2.getValue()[0].getValue()) && // compare block signature value
-                o1.getValue()[1].getValue().equals(o2.getValue()[1].getValue()) // compare config signature value
-                ? 0 : -1 //TODO: compare the signature values too
+        comparator = (ReplyTuple o1, ReplyTuple o2) -> o1.block.equals(o2.block) && // compare entire block
+                o1.metadata[0].getValue().equals(o2.metadata[0].getValue()) &&      // compare block signature value
+                o1.metadata[1].getValue().equals(o2.metadata[1].getValue()) &&      // compare config signature value
+                o1.channel.equals(o2.channel) &&                                    // compare channel id
+                o1.config == o2.config                                              // compare block type
+                ? 0 : -1
 
         ;
         
@@ -156,8 +158,6 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     
     private void processReplyBlock (TOMMessage tomm) {
         
-        Common.Block response = null;
-
         if (tomm.getSequence() < next) { // ignore replies that no longer matter
 
             replies.remove(tomm.getSequence());
@@ -171,29 +171,34 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         }
 
         if (replies.get(tomm.getSequence()) == null) //avoid nullpointer exception
-            replies.put(tomm.getSequence(), new Entry[getViewManager().getCurrentViewN()]);
+            replies.put(tomm.getSequence(), new ReplyTuple[getViewManager().getCurrentViewN()]);
 
         byte[][] contents = null;
         Common.Block block = null;
         Common.Metadata metadata[] = new Common.Metadata[2];
+        String channel = null;
+        boolean config = false;
 
         try {
             contents = deserializeContents(tomm.getContent());
-            if (contents == null || contents.length < 3) return;
+            if (contents == null || contents.length < 5) return;
             block = Common.Block.parseFrom(contents[0]);
             if (block == null) return;
             metadata[0] = Common.Metadata.parseFrom(contents[1]);
             if (metadata[0] == null) return;
             metadata[1] = Common.Metadata.parseFrom(contents[2]);
             if (metadata[1] == null) return;
+            channel = new String(contents[3]);
+            config = (contents[4][0] == 1);
+            
         } catch (IOException ex) {
             ex.printStackTrace();
             return;
         }
 
-        Entry[] reps = replies.get(tomm.getSequence());
+        ReplyTuple[] reps = replies.get(tomm.getSequence());
 
-        reps[pos] = new SimpleEntry<>(block,metadata);
+        reps[pos] = new ReplyTuple(block,metadata,channel,config);
 
         int sameContent = 1;
 
@@ -204,8 +209,8 @@ public class ProxyReplyListener extends AsynchServiceProxy {
 
                 sameContent++;
                 if (sameContent >= replyQuorum) {
-                    response = getBlock(reps, pos);
-                    responses.put(tomm.getSequence(), response);
+                    Common.Block response = getBlock(reps, pos);
+                    responses.put(tomm.getSequence(), new SimpleEntry<>(channel + ":" + config, response));
 
                     if (tomm.getViewID() > nextView) {
 
@@ -245,9 +250,9 @@ public class ProxyReplyListener extends AsynchServiceProxy {
                         
     }
     
-    public Common.Block getNext() {
+    public Entry<String,Common.Block> getNext() {
         
-        Common.Block ret = null;
+        Entry<String,Common.Block> ret = null;
         
         this.inputLock.lock();
         while ((ret = responses.get(next)) == null) {
@@ -262,9 +267,9 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         return ret;
     }
                            
-    private Common.Block getBlock(Entry<Common.Block, Common.Metadata[]>[] replies, int lastReceived) {
+    private Common.Block getBlock(ReplyTuple[] replies, int lastReceived) {
         
-            Common.Block.Builder block = replies[lastReceived].getKey().toBuilder();
+            Common.Block.Builder block = replies[lastReceived].block.toBuilder();
             Common.BlockMetadata.Builder blockMetadata = block.getMetadata().toBuilder();
             
             Common.Metadata[] blockSigs = new Common.Metadata[replies.length];
@@ -277,8 +282,8 @@ public class ProxyReplyListener extends AsynchServiceProxy {
                 
                 if (replies[i] != null) {
 
-                    blockSigs[i] = replies[i].getValue()[0];
-                    configSigs[i] = replies[i].getValue()[1];
+                    blockSigs[i] = replies[i].metadata[0];
+                    configSigs[i] = replies[i].metadata[1];
                     
                 }
             }
@@ -334,5 +339,20 @@ public class ProxyReplyListener extends AsynchServiceProxy {
  
         
         return batch;
+    }
+    
+    private class ReplyTuple {
+        
+        Common.Block block;
+        Common.Metadata[] metadata;
+        String channel;
+        boolean config;
+        
+        ReplyTuple (Common.Block block, Common.Metadata[] metadata, String channel, boolean config) {
+            this.block = block;
+            this.metadata = metadata;
+            this.channel = channel;
+            this.config = config;
+        }
     }
 }

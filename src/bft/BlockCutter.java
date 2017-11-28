@@ -12,8 +12,12 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.logging.Log;
@@ -27,11 +31,11 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class BlockCutter {
     
-    private LinkedList<byte[]> pendingBatch;
+    private Map<String, List<byte[]>> pendingBatches;
        
     private long PreferredMaxBytes = 0;
     private long MaxMessageCount = 0;
-    private int  pendingBatchSizeBytes = 0;
+    private Map<String, Integer>  pendingBatchSizeBytes;
     
     private Log logger;
 
@@ -39,7 +43,8 @@ public class BlockCutter {
         
         logger = LogFactory.getLog(BlockCutter.class);
         
-        pendingBatch = new LinkedList<>();
+        pendingBatches = new TreeMap<>();
+        pendingBatchSizeBytes = new TreeMap<>();
         
     }
     
@@ -47,35 +52,40 @@ public class BlockCutter {
         
         logger = LogFactory.getLog(BlockCutter.class);
         
-        pendingBatch = new LinkedList<>();
+        pendingBatches = new TreeMap<>();
+        pendingBatchSizeBytes = new TreeMap<>();
+        
         setBatchParms(bytes);
     }
     
-    public List<byte[][]> ordered(byte [] env) throws IOException {
+    public List<byte[][]> ordered(String channel, byte [] env, boolean isolated) throws IOException {
        
+        if (pendingBatches.get(channel) == null) {
+            pendingBatches.put(channel, new LinkedList<>());
+            pendingBatchSizeBytes.put(channel, 0);
+        }
+        
         LinkedList batches = new LinkedList<>();
         int messageSizeBytes = messageSizeBytes(env);
-        
-        //TODO: implement stuff for isolated envelops (see original golang BlockCutter code)
-        
-        if (/*committer.Isolated() || TODO: implement it*/ messageSizeBytes > PreferredMaxBytes) {
+                
+        if (isolated ||  messageSizeBytes > PreferredMaxBytes) {
 
-		/*if (committer.Isolated()) { TODO: implement it
+		if (isolated) {
 			logger.debug("Found message which requested to be isolated, cutting into its own batch");
 		} else {
 			logger.debug("The current message, with " + messageSizeBytes + " bytes, is larger than the preferred batch size of " + PreferredMaxBytes + " bytes and will be isolated.");
-		}*/
+		}
 
 		// cut pending batch, if it has any messages
-		if (pendingBatch.size() > 0) {
-			batches.add(cut());
+		if (pendingBatches.get(channel).size() > 0) {
+			batches.add(cut(channel));
 		}
 
 		// create new batch with single message
-		pendingBatch.add(env);
-                pendingBatchSizeBytes += messageSizeBytes;
+		pendingBatches.get(channel).add(env);
+                pendingBatchSizeBytes.put(channel, (pendingBatchSizeBytes.get(channel) + messageSizeBytes));
                 
-                batches.add(cut());
+                batches.add(cut(channel));
 
 		return batches;
 	}
@@ -83,34 +93,38 @@ public class BlockCutter {
 
         //int messageSizeBytes = (env != null ? env.length : 0);
         
-        boolean messageWillOverflowBatchSizeBytes = pendingBatchSizeBytes+ messageSizeBytes > PreferredMaxBytes;
+        boolean messageWillOverflowBatchSizeBytes = pendingBatchSizeBytes.get(channel) + messageSizeBytes > PreferredMaxBytes;
         
         if (messageWillOverflowBatchSizeBytes) {
             
             logger.debug("The current message, with " + messageSizeBytes + " bytes, will overflow the pending batch of " + pendingBatchSizeBytes + " bytes.");
             logger.debug("Pending batch would overflow if current message is added, cutting batch now.");
             
-            batches.add(cut());
+            batches.add(cut(channel));
         }
         
         logger.debug("Enqueuing message into batch");
-	pendingBatch.add(env);
-	pendingBatchSizeBytes += messageSizeBytes;
+	pendingBatches.get(channel).add(env);
+	pendingBatchSizeBytes.put(channel, (pendingBatchSizeBytes.get(channel) + messageSizeBytes));
         
-        if (pendingBatch.size() >= MaxMessageCount) {
+        if (pendingBatches.get(channel).size() >= MaxMessageCount) {
             
             logger.debug("Batch size met, cutting batch");
-            batches.add(cut());
+            batches.add(cut(channel));
 	}
         
         return batches;
     }
     
-    public byte[][] cut() {
-        byte[][] batch = new byte[pendingBatch.size()][];
-        if (batch.length > 0) pendingBatch.toArray(batch);
-	pendingBatch.clear();
-	pendingBatchSizeBytes = 0;
+    public byte[][] cut(String channel) {
+        
+        if (pendingBatches.get(channel) == null) pendingBatches.put(channel, new LinkedList<>());
+        
+        byte[][] batch = new byte[pendingBatches.get(channel).size()][];
+        if (batch.length > 0) pendingBatches.get(channel).toArray(batch);
+	pendingBatches.get(channel).clear();
+	pendingBatchSizeBytes.put(channel, 0);
+        
 	return batch;
     }
             
@@ -139,26 +153,41 @@ public class BlockCutter {
     
     public byte[] serialize() throws IOException {
 
+        //serialize pending envelopes
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        ObjectOutput o = new ObjectOutputStream(b);   
+        o.writeObject(pendingBatches);
+        o.flush();
+        byte[] envs = b.toByteArray();
+        b.close();
+        o.close();
+        
+        //serialize pending batch sizes
+        b = new ByteArrayOutputStream();
+        o = new ObjectOutputStream(b);
+        o.writeObject(pendingBatchSizeBytes);
+        o.flush();
+        byte[] sizes = b.toByteArray();
+        b.close();
+        o.close();
+            
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bos);
                 
-        out.writeInt(pendingBatch.size());
+        out.writeInt(envs.length);
+        out.write(envs);
 
         out.flush();
         bos.flush();
-        for (int i = 0; i < pendingBatch.size(); i++) {
-
-            out.writeInt(pendingBatch.get(i).length);
-
-            out.write(pendingBatch.get(i));
-
-            out.flush();
-            bos.flush();
-        }
         
+        out.writeInt(sizes.length);
+        out.write(sizes);
+
+        out.flush();
+        bos.flush();
+      
         out.writeLong(PreferredMaxBytes);
         out.writeLong(MaxMessageCount);
-        out.writeInt(pendingBatchSizeBytes);
 
         out.flush();
         bos.flush();
@@ -169,31 +198,50 @@ public class BlockCutter {
 
     }
     
-    public void deserialize(byte[] bytes) throws IOException {
-        
-        pendingBatch = new LinkedList<>();
-        
+    public void deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
+                
         ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
         DataInputStream in = new DataInputStream(bis);
-        int nEnvs =  in.readInt();
-        
-        for (int i = 0; i < nEnvs; i++) {
-            
-            int length = in.readInt();
+                
+        byte[] envs = new byte[0];
+        int n = in.readInt();
 
-            byte[] env = new byte[length];
-            in.read(env);
-            
-            pendingBatch.add(env);
+        if (n > 0) {
+
+            envs = new byte[n];
+            in.read(envs);
+
+        }
+        
+        byte[] sizes = new byte[0];
+        n = in.readInt();
+
+        if (n > 0) {
+
+            sizes = new byte[n];
+            in.read(sizes);
+
         }
         
         PreferredMaxBytes = in.readLong();
         MaxMessageCount = in.readLong();
-        pendingBatchSizeBytes = in.readInt();
         
         in.close();
         bis.close();
  
+        ByteArrayInputStream b = new ByteArrayInputStream(envs);
+        ObjectInput i = null;
+            
+        i = new ObjectInputStream(b);
+        this.pendingBatches = (Map<String,List<byte[]>>) i.readObject();
+        i.close();
+        b.close();
         
+        b = new ByteArrayInputStream(sizes);
+            
+        i = new ObjectInputStream(b);
+        this.pendingBatchSizeBytes = (Map<String,Integer>) i.readObject();
+        i.close();
+        b.close();
     }
 }

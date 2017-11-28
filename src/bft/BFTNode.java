@@ -11,14 +11,18 @@ import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
 import bftsmart.tom.server.defaultservices.DefaultReplier;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
 import java.io.StringWriter;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
@@ -29,7 +33,9 @@ import java.security.SignatureException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -101,7 +107,10 @@ public class BFTNode extends DefaultRecoverable {
     private Set<Integer> orderers;
     private BlockCutter blockCutter;
     private int sequence = 0;
-    private Common.BlockHeader lastBlockHeader; //blockchain related
+    //private Common.BlockHeader lastBlockHeader; //blockchain related
+    private Map<String,Common.BlockHeader> lastBlockHeaders;
+    //private Map<Integer, String> channels;
+    private String sysChannel = "";
 
     public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
 
@@ -133,7 +142,10 @@ public class BFTNode extends DefaultRecoverable {
         for (int o : orderers) {
             this.orderers.add(o);
         }
-
+        
+        this.sequence = 0;
+        this.lastBlockHeaders = new TreeMap<>();
+        
         //logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
         //logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
         
@@ -167,26 +179,25 @@ public class BFTNode extends DefaultRecoverable {
             ByteArrayInputStream bis = new ByteArrayInputStream(state);
             DataInputStream in = new DataInputStream(bis);
             
+            sysChannel = in.readUTF();
             sequence = in.readInt();
             
+            orderers = new TreeSet<Integer>();
             int n = in.readInt();
             
-            orderers = new TreeSet<Integer>();
-
             for (int i = 0; i < n; i++) {
                 
                 orderers.add(new Integer(in.readInt()));
             }
             
-            lastBlockHeader = null;
+            byte[] headers = new byte[0];
             n = in.readInt();
             
             if (n > 0) {
                 
-                byte[] b = new byte[n];
-                in.read(b);
+                headers = new byte[n];
+                in.read(headers);
                 
-                lastBlockHeader = Common.BlockHeader.parseFrom(b);
             }
             
             blockCutter = null;
@@ -201,7 +212,17 @@ public class BFTNode extends DefaultRecoverable {
                 blockCutter.deserialize(b);
             }
             
+            //deserialize headers
+            ByteArrayInputStream b = new ByteArrayInputStream(headers);
+            ObjectInput i = new ObjectInputStream(b);
+            
+            this.lastBlockHeaders = (Map<String,Common.BlockHeader>) i.readObject();
+            i.close();
+            b.close();
+            
         } catch (IOException ex) {
+            ex.printStackTrace();
+        } catch (ClassNotFoundException ex) {
             ex.printStackTrace();
         }
     }
@@ -211,50 +232,62 @@ public class BFTNode extends DefaultRecoverable {
         
         try {
             
-            Integer[] a;
+            //serialize block headers
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            ObjectOutput o = new ObjectOutputStream(b);   
+            o.writeObject(lastBlockHeaders);
+            o.flush();
+            byte[] headers = b.toByteArray();
+            b.close();
+            o.close();
             
-            if (orderers != null) {
-                a = new Integer[orderers.size()];
-                orderers.toArray(a);
+            //serialize receivers
+            Integer[] orderers;
+            
+            if (this.orderers != null) {
+                orderers = new Integer[this.orderers.size()];
+                this.orderers.toArray(orderers);
             } else {
-                a = new Integer[0];
+                orderers = new Integer[0];
             }
+                        
+            //serialize block cutter
+            byte[] blockcutter = (blockCutter != null ? blockCutter.serialize() : new byte[0]);
             
-            byte[] b = (lastBlockHeader != null ? lastBlockHeader.toByteArray() : new byte[0]);
-            
-            byte[] c = (blockCutter != null ? blockCutter.serialize() : new byte[0]);
-            
+            //concatenate bytes
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bos);
             
+            out.writeUTF(sysChannel);
             out.writeInt(sequence);
             
-            out.writeInt(a.length);
+            out.writeInt(orderers.length);
             
             out.flush();
             bos.flush();
             
-            for (int i = 0; i < a.length; i++) {
+            for (int i = 0; i < orderers.length; i++) {
                 
-                out.writeInt(a[i].intValue());
+                out.writeInt(orderers[i].intValue());
                 
                 out.flush();
                 bos.flush();
                 
             }
             
-            out.writeInt(b.length);
-            if (b.length > 0) out.write(b);
+            out.writeInt(headers.length);
+            if (headers.length > 0) out.write(headers);
             out.flush();
             bos.flush();
             
-            out.writeInt(c.length);
-            if (c.length > 0) out.write(c);
+            out.writeInt(blockcutter.length);
+            if (blockcutter.length > 0) out.write(blockcutter);
             out.flush();
             bos.flush();
             
             out.close();
             bos.close();
+            
             return bos.toByteArray();
             
         } catch (IOException ex) {
@@ -272,66 +305,84 @@ public class BFTNode extends DefaultRecoverable {
         for (int i = 0; i < commands.length; i++) {
             if (msgCtxs != null && msgCtxs[i] != null) {
 
-                replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
+                try {
+                    replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
             }
         }
 
         return replies;
     }
 
-    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) {
+    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) throws IOException {
 
         if (orderers.contains(msgCtx.getSender())) {
             
-            if (Arrays.equals("GETVIEW".getBytes(), command)) {
-                
-                System.out.println("A proxy is trying to fetch the most current view");
-                return new byte[0];
-            }
-
-            if (command.length == 0 && blockCutter != null) {
-
-                byte[][] batch = blockCutter.cut();
-
-                if (batch.length > 0) {
-
-                    assembleAndSend(batch, msgCtx, fromConsensus);
-                }
-
-                logger.debug("Purging blockcutter");
-
-            }
-
             if (msgCtx.getSequence() == 0) {
 
                 if (blockCutter == null) {
+                    
+                    logger.info("Initializing blockcutter");
+                    
                     blockCutter = new BlockCutter(command);
                 }
 
+                return new byte[0];
             }
-
-            if (msgCtx.getSequence() == 1) {
-
-                if (lastBlockHeader != null) {
-                    return new byte[0];
-                }
-
-                Common.BlockHeader header = null;
-                try {
-                    header = Common.BlockHeader.parseFrom(command);
-                    lastBlockHeader = header;
-
-                    logger.info("Genesis header number: " + lastBlockHeader.getNumber());
-                    logger.info("Genesis header previous hash: " + Arrays.toString(lastBlockHeader.getPreviousHash().toByteArray()));
-                    logger.info("Genesis header data hash: " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
-                    logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeader)));
-
-                } catch (InvalidProtocolBufferException ex) {
-                    ex.printStackTrace();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+                       
+            if (Arrays.equals("GETVIEW".getBytes(), command)) {
+                
+                logger.info("A proxy is trying to fetch the most current view");
+                return new byte[0];
             }
+            
+            RequestTuple tuple = deserializeRequest(command);
+
+            if (tuple.type.equals("NEWCHANNEL")) {
+                                             
+                if (tuple.channelID != null && lastBlockHeaders.get(tuple.channelID) == null) {
+
+                    Common.BlockHeader header = null;
+
+                    header = Common.BlockHeader.parseFrom(tuple.payload);
+                
+                    lastBlockHeaders.put(tuple.channelID, header);
+
+                    logger.info("New channel ID: " + tuple.channelID);
+                    logger.info("Genesis header number: " + lastBlockHeaders.get(tuple.channelID).getNumber());
+                    logger.info("Genesis header previous hash: " + Arrays.toString(lastBlockHeaders.get(tuple.channelID).getPreviousHash().toByteArray()));
+                    logger.info("Genesis header data hash: " + Arrays.toString(lastBlockHeaders.get(tuple.channelID).getDataHash().toByteArray()));
+                    logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeaders.get(tuple.channelID))));
+                    
+                    if (msgCtx.getSequence() == 1) {
+
+                        logger.info("Setting system channel to " + tuple.channelID);
+
+                        sysChannel = tuple.channelID;
+                    }
+                }
+                
+                return new byte[0];
+            }
+            
+            if (tuple.type.equals("TIMEOUT") && (blockCutter != null)) {
+                
+                
+                logger.info("Purging blockcutter for channel " + tuple.channelID);
+
+                byte[][] batch = blockCutter.cut(tuple.channelID);
+
+                if (batch.length > 0) {
+
+                    assembleAndSend(batch, msgCtx, fromConsensus, tuple.channelID, false);
+                }
+                
+                return new byte[0];
+
+            }
+                            
             return new byte[0];
         }
 
@@ -352,32 +403,34 @@ public class BFTNode extends DefaultRecoverable {
         logger.debug("Envelopes received: " + countEnvelopes);
 
         List<byte[][]> batches = null;
-        try {
-            batches = blockCutter.ordered(command);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+                    
+        RequestTuple tuple = deserializeRequest(command);
+        boolean isConfig = tuple.type.equals("CONFIG");
+
+        logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
+
+        batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
 
         if (batches != null) {
-        
+
             for (int i = 0; i < batches.size(); i++) {
-                assembleAndSend(batches.get(i), msgCtx, fromConsensus);
+                assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
             }
-        
+
         }
         
         return "ACK".getBytes();
 
     }
 
-    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus) {
+    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus, String channel, boolean config) {
         try {
 
             if (blockMeasurementStartTime == -1) {
                 blockMeasurementStartTime = System.currentTimeMillis();
             }
-
-            Common.Block block = createNextBlock(lastBlockHeader.getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeader)), batch);
+            
+            Common.Block block = createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
 
             countBlocks++;
 
@@ -389,32 +442,32 @@ public class BFTNode extends DefaultRecoverable {
 
             }
 
-            this.lastBlockHeader = block.getHeader();
+            lastBlockHeaders.put(channel, block.getHeader());
             
-            if ((lastBlockHeader.getNumber() % 100) == 0)
-                 System.out.println("Genesis header hash for header #" + lastBlockHeader.getNumber() + ": " + Arrays.toString(lastBlockHeader.getDataHash().toByteArray()));
-
+            if ((lastBlockHeaders.get(channel).getNumber() % 100) == 0)
+                 System.out.println("[" + channel + "] Genesis header hash for header #" + lastBlockHeaders.get(channel).getNumber() + ": " + Arrays.toString(lastBlockHeaders.get(channel).getDataHash().toByteArray()));
+            
             //optimization to parellise signatures and sending
             if (fromConsensus) { //if this is from the state transfer, there is no point in signing and sending yet again
                 
                 if (sigIndex % SIG_LIMIT == 0) {
 
                     if (currentSST != null) {
-                        currentSST.input(null, null, -1);
+                        currentSST.input(null, null, -1, null, false);
                     }
 
                     currentSST = this.queue.take(); // fetch the first SSThread that is idle
 
                 }
 
-                currentSST.input(block, msgCtx, this.sequence);
+                currentSST.input(block, msgCtx, this.sequence, channel, config);
                 sigIndex++;
             }
             
             //Runnable SSThread = new SignerSenderThread(block, msgCtx, this.sequence);
             //this.executor.execute(SSThread);
             this.sequence++; // because of parelisation, I need to increment the sequence number in this method
-
+                       
             //standard code for sequential signing and sending (with debbuging prints)
             /*CommonProtos.Metadata blockSig = createMetadataSignature(("BFT-SMaRt::"+id).getBytes(), msgCtx.getNonces(), null, lastBlockHeader);
             byte[] dummyConf= {0,0,0,0,0,0,0,1}; //TODO: find a way to implement the check that is done in the golang code
@@ -426,7 +479,7 @@ public class BFTNode extends DefaultRecoverable {
         }
     }
 
-    private void sendToOrderers(Common.Block block, Common.Metadata blockSig, Common.Metadata configSig, MessageContext msgCtx) throws IOException {
+    /*private void sendToOrderers(Common.Block block, Common.Metadata blockSig, Common.Metadata configSig, MessageContext msgCtx) throws IOException {
 
         byte[][] contents = new byte[3][];
         contents[0] = block.toByteArray();
@@ -451,7 +504,7 @@ public class BFTNode extends DefaultRecoverable {
         replica.getReplicaContext().getServerCommunicationSystem().send(clients, reply);
 
         sequence++;
-    }
+    }*/
 
     private byte[] serializeContents(byte[][] contents) throws IOException {
 
@@ -702,6 +755,23 @@ public class BFTNode extends DefaultRecoverable {
         return ident.build();
     }
 
+    private RequestTuple deserializeRequest(byte[] request) throws IOException {
+        
+        ByteArrayInputStream bis = new ByteArrayInputStream(request);
+        DataInput in = new DataInputStream(bis);
+        
+        String type = in.readUTF();
+        String channelID = in.readUTF();
+        int l = in.readInt();
+        byte[] payload = new byte[l];
+        in.readFully(payload);
+      
+        bis.close();
+        
+        return new RequestTuple(type, channelID, payload);
+        
+    }
+            
     @Override
     public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
         return new byte[0];
@@ -728,11 +798,11 @@ public class BFTNode extends DefaultRecoverable {
             this.queue.put(this);
         }
 
-        public void input(Common.Block block, MessageContext msgContext, int seq) throws InterruptedException {
+        public void input(Common.Block block, MessageContext msgContext, int seq, String channel, boolean config) throws InterruptedException {
 
             this.inputLock.lock();
 
-            this.input.put(new BFTTuple(block, msgContext, seq));
+            this.input.put(new BFTTuple(block, msgContext, seq, channel, config));
 
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
@@ -785,10 +855,12 @@ public class BFTNode extends DefaultRecoverable {
                         }
 
                         //serialize contents
-                        byte[][] contents = new byte[3][];
+                        byte[][] contents = new byte[5][];
                         contents[0] = tuple.block.toByteArray();
                         contents[1] = blockSig.toByteArray();
                         contents[2] = configSig.toByteArray();
+                        contents[3] = tuple.channelID.getBytes();
+                        contents[4] = new byte[] { (tuple.config ? (byte) 1 :(byte) 0) };
 
                         byte[] serialized = serializeContents(contents);
 
@@ -842,12 +914,30 @@ public class BFTNode extends DefaultRecoverable {
         Common.Block block = null;
         MessageContext msgContext = null;
         int sequence = -1;
+        String channelID = null;
+        boolean config = false;
 
-        BFTTuple(Common.Block block, MessageContext msgCtx, int sequence) {
+        BFTTuple(Common.Block block, MessageContext msgCtx, int sequence, String channelID, boolean config) {
 
             this.block = block;
             this.msgContext = msgCtx;
             this.sequence = sequence;
+            this.channelID = channelID;
+            this.config = config;
+        }
+    }
+    
+    private class RequestTuple {
+
+        String type = null;
+        String channelID = null;
+        byte[] payload = null;
+
+        RequestTuple(String type, String channelID, byte[] payload) {
+
+            this.type = type;
+            this.channelID = channelID;
+            this.payload = payload;
 
         }
     }
