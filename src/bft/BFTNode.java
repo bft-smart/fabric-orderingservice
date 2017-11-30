@@ -11,12 +11,14 @@ import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
 import bftsmart.tom.server.defaultservices.DefaultReplier;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -46,6 +48,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.LineIterator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -70,23 +74,26 @@ import org.hyperledger.fabric.protos.msp.Identities;
  */
 public class BFTNode extends DefaultRecoverable {
 
-    public final static String BFTSMART_CONFIG_FOLDER = "./config/";
+    public final static String DEFAULT_CONFIG_FOLDER = "./config/";
 
     private int id;
-    private String Mspid;
     private ServiceReplica replica = null;
+    private CryptoPrimitives crypto;
+    private Log logger;
+    private String configFolder;
+
+    // MSP stuff
+    private String mspid = null;
     private PrivateKey privKey = null;
     private X509CertificateHolder certificate = null;
     private byte[] serializedCert = null;
     private Identities.SerializedIdentity ident;
-    private CryptoPrimitives crypto;
-    private Log logger;
 
     //signature thread stuff
-    private int paralellism;
+    private int parallelism;
     LinkedBlockingQueue<SignerSenderThread> queue;
     private ExecutorService executor = null;
-    private final int SIG_LIMIT = 10000;
+    private int blocksPerThread;
     private int sigIndex = 0;
     private SignerSenderThread currentSST = null;
 
@@ -104,52 +111,43 @@ public class BFTNode extends DefaultRecoverable {
     private Condition replicaReady;
 
     //these attributes are the state of this replicated state machine
-    private Set<Integer> orderers;
+    private Set<Integer> receivers;
     private BlockCutter blockCutter;
     private int sequence = 0;
-    //private Common.BlockHeader lastBlockHeader; //blockchain related
+    private long lastConfig = 0;
     private Map<String,Common.BlockHeader> lastBlockHeaders;
-    //private Map<Integer, String> channels;
     private String sysChannel = "";
 
-    public BFTNode(int id, int parallelism, String certFile, String keyFile, int[] orderers) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
+    public BFTNode(int id, String configFolder) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
 
         this.replicaLock = new ReentrantLock();
         this.replicaReady = replicaLock.newCondition();
 
         this.id = id;
+        this.configFolder = (configFolder != null ? configFolder : BFTNode.DEFAULT_CONFIG_FOLDER);
+
+        loadConfig();
         
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
-
+        
         this.logger = LogFactory.getLog(BFTNode.class);
 
-        this.privKey = getPemPrivateKey(keyFile);
-        parseCertificate(certFile);
-        this.Mspid = "DEFAULT";
-        this.ident = getSerializedIdentity();
-
-        this.paralellism = parallelism;
         this.queue = new LinkedBlockingQueue<>();
-        this.executor = Executors.newWorkStealingPool(this.paralellism);
+        this.executor = Executors.newWorkStealingPool(this.parallelism);
 
         for (int i = 0; i < parallelism; i++) {
 
             this.executor.execute(new SignerSenderThread(this.queue));
         }
-
-        this.orderers = new TreeSet<>();
-        for (int o : orderers) {
-            this.orderers.add(o);
-        }
         
         this.sequence = 0;
         this.lastBlockHeaders = new TreeMap<>();
-        
+                
         //logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
         //logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
         
-        this.replica = new ServiceReplica(this.id, this.BFTSMART_CONFIG_FOLDER, this, this, null, new NoopReplier());
+        this.replica = new ServiceReplica(this.id, this.configFolder, this, this, null, new NoopReplier());
         
         this.replicaLock.lock();
         this.replicaReady.signalAll();
@@ -157,18 +155,71 @@ public class BFTNode extends DefaultRecoverable {
         
     }
 
+    private String extractMSPID(byte[] bytes) {
+        try {
+            Common.Envelope env = Common.Envelope.parseFrom(bytes);
+            Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
+            Common.SignatureHeader sigHeader = Common.SignatureHeader.parseFrom(payload.getHeader().getSignatureHeader());
+            Identities.SerializedIdentity ident = Identities.SerializedIdentity.parseFrom(sigHeader.getCreator());
+            return ident.getMspid();
+            
+            
+        } catch (InvalidProtocolBufferException ex) {
+            //ex.printStackTrace();
+            return null;
+        }
+        
+    }
+    
+    private void loadConfig() throws IOException {
+        
+        LineIterator it = FileUtils.lineIterator(new File(this.configFolder + "node.config"), "UTF-8");
+        
+        Map<String,String> configs = new TreeMap<>();
+        
+        while (it.hasNext()) {
+        
+            String line = it.nextLine();
+            
+            if (!line.startsWith("#") && line.contains("=")) {
+            
+                String[] params = line.split("\\=");
+                
+                configs.put(params[0], params[1]);
+            
+            }
+        }
+        
+        it.close();
+        
+        mspid = configs.get("MSPID");
+        privKey = getPemPrivateKey(configs.get("PRIVKEY"));
+        certificate = getCertificate(configs.get("CERTIFICATE"));
+        serializedCert = getSerializedCertificate(certificate);
+        ident = getSerializedIdentity(mspid, serializedCert);
+        parallelism = Integer.parseInt(configs.get("PARELLELISM"));
+        blocksPerThread = Integer.parseInt(configs.get("BLOCKS_PER_THREAD"));
+        
+        String[] IDs = configs.get("RECEIVERS").split("\\,");
+        int[] receivers = Arrays.asList(IDs).stream().mapToInt(Integer::parseInt).toArray();
+        
+        this.receivers = new TreeSet<>();
+        for (int o : receivers) {
+            this.receivers.add(o);
+        }
+                
+    }
+    
     public static void main(String[] args) throws Exception {
 
-        if (args.length < 5) {
-            System.out.println("Use: java BFTNode <processId> <thread pool size> <certificate key file> <private key file> <proxy IDs>");
+        if (args.length < 1) {
+            System.out.println("Use: java BFTNode <processId> [<config folder>]");
             System.exit(-1);
         }
-
-        String[] IDs = args[4].split("\\,");
-        int[] orderers = Arrays.asList(IDs).stream().mapToInt(Integer::parseInt).toArray();
-        new BFTNode(Integer.parseInt(args[0]), Integer.parseInt(args[1]), args[2], args[3], orderers);
-
-        //new BFTNode(0);
+        String configFolder = null;
+        if (args.length > 1) configFolder = args[1];
+        
+        new BFTNode(Integer.parseInt(args[0]),configFolder);
     }
 
     @Override
@@ -181,13 +232,14 @@ public class BFTNode extends DefaultRecoverable {
             
             sysChannel = in.readUTF();
             sequence = in.readInt();
+            lastConfig = in.readLong();
             
-            orderers = new TreeSet<Integer>();
+            receivers = new TreeSet<Integer>();
             int n = in.readInt();
             
             for (int i = 0; i < n; i++) {
                 
-                orderers.add(new Integer(in.readInt()));
+                receivers.add(new Integer(in.readInt()));
             }
             
             byte[] headers = new byte[0];
@@ -244,9 +296,9 @@ public class BFTNode extends DefaultRecoverable {
             //serialize receivers
             Integer[] orderers;
             
-            if (this.orderers != null) {
-                orderers = new Integer[this.orderers.size()];
-                this.orderers.toArray(orderers);
+            if (this.receivers != null) {
+                orderers = new Integer[this.receivers.size()];
+                this.receivers.toArray(orderers);
             } else {
                 orderers = new Integer[0];
             }
@@ -260,6 +312,7 @@ public class BFTNode extends DefaultRecoverable {
             
             out.writeUTF(sysChannel);
             out.writeInt(sequence);
+            out.writeLong(lastConfig);
             
             out.writeInt(orderers.length);
             
@@ -318,7 +371,7 @@ public class BFTNode extends DefaultRecoverable {
 
     private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) throws IOException {
 
-        if (orderers.contains(msgCtx.getSender())) {
+        if (receivers.contains(msgCtx.getSender())) {
             
             if (msgCtx.getSequence() == 0) {
 
@@ -409,14 +462,22 @@ public class BFTNode extends DefaultRecoverable {
 
         logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
 
-        batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
+        String mspid = extractMSPID(tuple.payload);
+        if (mspid != null && this.mspid.equals(mspid)) {
+        
+            batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
 
-        if (batches != null) {
+            if (batches != null) {
 
-            for (int i = 0; i < batches.size(); i++) {
-                assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
+                for (int i = 0; i < batches.size(); i++) {
+                    assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
+                }
+
             }
-
+            
+        }
+        else {
+            logger.info((mspid == null ? "Malformed envelope" : "Envelope's MSPID is unknown")+", discarding");
         }
         
         return "ACK".getBytes();
@@ -432,6 +493,8 @@ public class BFTNode extends DefaultRecoverable {
             
             Common.Block block = createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
 
+            if (config) lastConfig = block.getHeader().getNumber();
+                
             countBlocks++;
 
             if (countBlocks % interval == 0) {
@@ -450,17 +513,17 @@ public class BFTNode extends DefaultRecoverable {
             //optimization to parellise signatures and sending
             if (fromConsensus) { //if this is from the state transfer, there is no point in signing and sending yet again
                 
-                if (sigIndex % SIG_LIMIT == 0) {
+                if (sigIndex % blocksPerThread == 0) {
 
                     if (currentSST != null) {
-                        currentSST.input(null, null, -1, null, false);
+                        currentSST.input(null, null, -1, null, false, -1);
                     }
 
                     currentSST = this.queue.take(); // fetch the first SSThread that is idle
 
                 }
 
-                currentSST.input(block, msgCtx, this.sequence, channel, config);
+                currentSST.input(block, msgCtx, this.sequence, channel, config, lastConfig);
                 sigIndex++;
             }
             
@@ -726,13 +789,21 @@ public class BFTNode extends DefaultRecoverable {
 
     }
     
-    private void parseCertificate(String filename) throws IOException {
+    private X509CertificateHolder getCertificate(String filename) throws IOException {
 
         BufferedReader br = new BufferedReader(new FileReader(filename));
         PEMParser pp = new PEMParser(br);
-        this.certificate = (X509CertificateHolder) pp.readObject();
-
-        PemObject pemObj = (new PemObject("", this.certificate.getEncoded()));
+        X509CertificateHolder ret = (X509CertificateHolder) pp.readObject();
+        
+        br.close();
+        pp.close();
+        
+        return ret;
+    }
+    
+    private byte[] getSerializedCertificate(X509CertificateHolder certificate) throws IOException {
+        
+        PemObject pemObj = (new PemObject("", certificate.getEncoded()));
 
         StringWriter strWriter = new StringWriter();
         PemWriter writer = new PemWriter(strWriter);
@@ -741,13 +812,11 @@ public class BFTNode extends DefaultRecoverable {
         writer.close();
         strWriter.close();
 
-        this.serializedCert = strWriter.toString().getBytes();
-
-        logger.info("Certificate: " + new String(this.serializedCert));
-
+        return strWriter.toString().getBytes();
+        
     }
 
-    private Identities.SerializedIdentity getSerializedIdentity() {
+    private Identities.SerializedIdentity getSerializedIdentity(String Mspid, byte[] serializedCert) {
 
         Identities.SerializedIdentity.Builder ident = Identities.SerializedIdentity.newBuilder();
         ident.setMspid(Mspid);
@@ -798,11 +867,11 @@ public class BFTNode extends DefaultRecoverable {
             this.queue.put(this);
         }
 
-        public void input(Common.Block block, MessageContext msgContext, int seq, String channel, boolean config) throws InterruptedException {
+        public void input(Common.Block block, MessageContext msgContext, int seq, String channel, boolean config, long lastConfig) throws InterruptedException {
 
             this.inputLock.lock();
 
-            this.input.put(new BFTTuple(block, msgContext, seq, channel, config));
+            this.input.put(new BFTTuple(block, msgContext, seq, channel, config, lastConfig));
 
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
@@ -841,8 +910,10 @@ public class BFTNode extends DefaultRecoverable {
                         //create signatures
                         Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), null, tuple.block.getHeader());
 
-                        byte[] dummyConf = {0, 0, 0, 0, 0, 0, 0, 1}; //TODO: find a way to implement the check that is done in the golang code
-                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), dummyConf, tuple.block.getHeader());
+                        Common.LastConfig.Builder last = Common.LastConfig.newBuilder();
+                        last.setIndex(tuple.lastConf);
+                        
+                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), last.build().toByteArray(), tuple.block.getHeader());
 
                         countSigs++;
 
@@ -885,7 +956,7 @@ public class BFTNode extends DefaultRecoverable {
                         List<Integer> activeOrderers = new LinkedList<>();
 
                         for (Integer c : clients) {
-                            if (orderers.contains(c)) {
+                            if (receivers.contains(c)) {
 
                                 activeOrderers.add(c);
 
@@ -916,14 +987,16 @@ public class BFTNode extends DefaultRecoverable {
         int sequence = -1;
         String channelID = null;
         boolean config = false;
+        long lastConf = -1;
 
-        BFTTuple(Common.Block block, MessageContext msgCtx, int sequence, String channelID, boolean config) {
+        BFTTuple(Common.Block block, MessageContext msgCtx, int sequence, String channelID, boolean config, long lastConf) {
 
             this.block = block;
             this.msgContext = msgCtx;
             this.sequence = sequence;
             this.channelID = channelID;
             this.config = config;
+            this.lastConf = lastConf;
         }
     }
     
@@ -947,7 +1020,7 @@ public class BFTNode extends DefaultRecoverable {
         @Override
         public void manageReply(TOMMessage tomm, MessageContext mc) {
             
-            if (!orderers.contains(tomm.getSender()))
+            if (!receivers.contains(tomm.getSender()))
                 super.manageReply(tomm, mc);
         }
 
