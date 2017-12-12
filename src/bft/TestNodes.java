@@ -40,7 +40,7 @@ public class TestNodes {
         int clients = Integer.parseInt(args[1]);
         
         
-        AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
+        AsynchServiceProxy proxy = new AsynchServiceProxy(initID, BFTNode.DEFAULT_CONFIG_FOLDER);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 // do nothing
             });
@@ -132,7 +132,7 @@ public class TestNodes {
         public ProxyThread (int id, byte[] env) {
             this.id = id;
             this.env = env;
-            this.proxy = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
+            this.proxy = new AsynchServiceProxy(this.id, BFTNode.DEFAULT_CONFIG_FOLDER);
             
             this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 //do nothing

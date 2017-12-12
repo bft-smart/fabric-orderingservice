@@ -89,7 +89,7 @@ public class BFTProxy {
         initID = Integer.parseInt(args[0]);
         nextID = initID + 1;
         
-        sysProxy = new ProxyReplyListener(initID, BFTNode.BFTSMART_CONFIG_FOLDER);
+        sysProxy = new ProxyReplyListener(initID, BFTNode.DEFAULT_CONFIG_FOLDER);
         
         int pool = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);
@@ -302,7 +302,7 @@ public class BFTProxy {
             this.id = id;
             this.recv = recv;
             this.input = new DataInputStream(this.recv.getInputStream());
-            this.out = new AsynchServiceProxy(this.id, BFTNode.BFTSMART_CONFIG_FOLDER);
+            this.out = new AsynchServiceProxy(this.id, BFTNode.DEFAULT_CONFIG_FOLDER);
             
         }
         
