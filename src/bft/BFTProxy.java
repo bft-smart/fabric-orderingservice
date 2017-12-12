@@ -98,17 +98,12 @@ public class BFTProxy {
             
             logger.info("Creating UNIX socket...");
             
-            Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "bft.sock");
+            Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "hlf-pool.sock");
             
             Files.deleteIfExists(p);
             
             recvServer = new  UnixDomainSocketServer(p.toString(), JUDS.SOCK_STREAM, pool);
             sendServer = new ServerSocket(sendPort);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
 
             logger.info("Waiting for local connections and parameters...");
             
@@ -150,20 +145,14 @@ public class BFTProxy {
             while (true) { // wait for the creation of new channels
             
                 sendSocket = sendServer.accept();
-
-                logger.info("Waiting for local connections and parameters...");
                                 
                 DataOutputStream os = new DataOutputStream(sendSocket.getOutputStream());
 
                 String channel = readString(is);
                 
                 if (isSysChannel) systemChannelID = channel;
-
-                logger.info("Read Channel ID: " + channel);
                 
                 byte[] bytes = readBytes(is);
-
-                logger.info("Read Genesis block");
                 
                 outputs.put(channel, os);
                
@@ -175,6 +164,8 @@ public class BFTProxy {
 
                 isSysChannel = false;
                 
+                logger.info("Setting up system for new channel '" + channel + "'");
+
                 nextID++;
             
             }
