@@ -16,7 +16,7 @@ To locally run the ordering service with 4 nodes, execute the commands bellow in
 6) Run 'orderer/sample_clients/deliver_stdout/deliver_stdout'
 7) Run 'orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --secure --messages [number of messages to send]'
 
-##Important note:
+### Important note:
 
 This version of codebase is not fully integrated to the Fabric system. For a version of this ordering service taht can work with Fabric, please checkout the "release-1.1" branch of this repo.
 
