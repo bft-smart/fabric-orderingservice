@@ -1,15 +1,15 @@
 # BFT ordering service for Hyperledger Fabric v1.1
 
-This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around BFT-SMaRt (https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
-For more information regarding this project, read the technical report available at  http://arxiv.org/abs/1709.06921
+This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around [BFT-SMaRt](https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
+For more information regarding this project, read the technical report available [here](http://arxiv.org/abs/1709.06921)
 
 ## Pre-requisites
 
 This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1.
 
-Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available at https://github.com/jcs47/fabric instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork.
+Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available [here](https://github.com/jcs47/fabric) instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork.
 
-The ordering service module uses the JUDS library to provide UNIX sockets for communication between Java and Go. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from https://github.com/mcfunley/juds and go through the installation steps described in the README.
+The ordering service module uses the JUDS library to provide UNIX sockets for communication between Java and Go. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from [here](https://github.com/mcfunley/juds) and go through the installation steps described in the README.
 
 ## Compiling
 
