@@ -13,7 +13,17 @@ The ordering service module uses the JUDS library to provide UNIX sockets for co
 
 ## Compiling
 
-Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing `sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh` before executing `make dist-clean peer orderer configtxgen`.
+Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
+
+```
+sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh
+```
+
+Following this, you can compile HLF as follows:
+
+```
+make dist-clean peer orderer configtxgen
+```
 
 Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolute path of the `./sampleconfig` directory of the fork. Assuming you have the `$GOROOT` environment variable properly set, you should be able to do this by typing `export FABRIC_CFG_PATH=$GOROOT/src/github.com/hyperledger/fabric/sampleconfig/` in the command line.
 
@@ -21,7 +31,7 @@ To compile the Java code provided by this repository, you can simply type `ant` 
 
 ## Launching 4 ordering nodes and a single frontend
 
-Edit the `./hyperledger-bftmart/config/node.config`file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, execute the `startReplica.sh` script in 4 different terminals as follows:
+Edit the `./hyperledger-bftmart/config/node.config`file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
 
 ```
 ./startReplica.sh 0
@@ -44,7 +54,7 @@ The Go component of the frontend requires a genesis block. Generate the block as
 ./fabric/build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
 ```
 
-The `<path to genesis file>` argument should match the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file. You can now launch the Go component as follows
+The `<path to genesis file>` argument should match the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file. You can now launch the Go component as follows:
 
 ```
 ./fabric/build/bin/orderer start
