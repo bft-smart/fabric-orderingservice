@@ -1,10 +1,20 @@
-# BFT ordering service for Hyperledger Fabric v1.0
+# BFT ordering service for Hyperledger Fabric v1.1
 
-This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.0. This BFT ordering service is a wrapper around BFT-SMaRt (https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon.
+This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around BFT-SMaRt (https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon.
 
-This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.0. It also requires the HLF fork repository available at https://github.com/jcs47/fabric
+## Pre-requisites
 
-Before compilng, make sure to switch to the 'zeromq' branch, both for this repository and for the aforementioned HLF fork. Because the code for these braches require the zeromq framework, it is also needed to install in the system all the dependencies for libraries goczmq (used by the HLF fork) and jzmq (used in this repository). Execute 'ant' in the main directory to compile the code. The HLF fork can be compile as usual.
+This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1.
+
+Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available at https://github.com/jcs47/fabric instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork.
+
+The ordering service module uses the JUDS library to provide UNIX sockets for communication between Java and Go. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from https://github.com/mcfunley/juds and go through the installation steps described in the README.
+
+## Compiling
+
+Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile this fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing `sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh` before executing `make dist-clean all`.
+
+## Running with sample clients
 
 To locally run the ordering service with 4 nodes, execute the commands bellow in the following order:
 
