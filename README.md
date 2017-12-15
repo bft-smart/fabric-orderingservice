@@ -16,16 +16,16 @@ The ordering service module uses the JUDS library to provide UNIX sockets for co
 Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
 
 ```
-cd $GOROOT/src/github.com/hyperledger/fabric/
+cd $GOPATH/src/github.com/hyperledger/fabric/
 sudo ./devenv/setupUbuntuOnPPC64le.sh
 ```
-Notice that even though we are working with a fork instead of the original HLF repository, the code still needs to be stored in `$GOROOT/src/github.com/hyperledger/fabric/` instead of `$GOROOT/src/github.com/jcs47/fabric/`. This is because this script and the makefile assume that path. Following this, you can compile HLF as follows:
+Notice that even though we are working with a fork instead of the original HLF repository, the code still needs to be stored in `$GOPATH/src/github.com/hyperledger/fabric/` instead of `$GOPATH/src/github.com/jcs47/fabric/`. This is because this script and the makefile assume that path. Following this, you can compile HLF as follows:
 
 ```
 make dist-clean peer orderer configtxgen
 ```
 
-Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolute path of the `./sampleconfig` directory of the fork. Assuming you have the `$GOROOT` environment variable properly set, you should be able to do this by typing `export FABRIC_CFG_PATH=$GOROOT/src/github.com/hyperledger/fabric/sampleconfig/` in the command line.
+Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolute path of the `./sampleconfig` directory of the fork. You should be able to do this by typing `export FABRIC_CFG_PATH=$GOPATH/src/github.com/hyperledger/fabric/sampleconfig/` in the command line. If you are using multiple terminals, you might need to type this command in each one of them.
 
 To compile the Java code provided by this repository, you can simply type `ant` in its main folder.
 
@@ -51,7 +51,7 @@ The first argument is the ID of the frontend, and it should match one of the IDs
 The Go component of the frontend requires a genesis block. Generate the block as follows:
 
 ```
-cd $GOROOT/src/github.com/hyperledger/fabric/
+cd $GOPATH/src/github.com/hyperledger/fabric/
 ./build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
 ```
 
@@ -66,7 +66,7 @@ The `<path to genesis file>` argument should match the absolute path in the `Gen
 To execute an example chaincode using this ordering service, generate the rest of the HLF artifacts as follows:
 
 ```
-cd $GOROOT/src/github.com/hyperledger/fabric/
+cd $GOPATH/src/github.com/hyperledger/fabric/
 ./build/bin/configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx <path to channel creation tx> -channelID <channel ID>
 ./build/bin/configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate <path to anchor peer update tx> -channelID <channel ID> -asOrg SampleOrg
 ```
@@ -102,7 +102,7 @@ Execute `go build`  at directories `./fabric/orderer/sample_clients/deliver_stdo
 Launch a client to receive the generated blocks as follows:
 
 ```
-cd $GOROOT/src/github.com/hyperledger/fabric/
+cd $GOPATH/src/github.com/hyperledger/fabric/
 ./orderer/sample_clients/deliver_stdout/deliver_stdout --quiet --channelID <system channel ID>
 ```
   
