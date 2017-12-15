@@ -7,7 +7,7 @@ For more information regarding this project, read the technical report available
 
 This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1.
 
-Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available [here](https://github.com/jcs47/fabric) instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork.
+Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available [here](https://github.com/jcs47/fabric) instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork. The pre-requisites associated to the HLF codebase can be found [here](http://hyperledger-fabric.readthedocs.io/en/release/prereqs.html)
 
 The ordering service module uses the JUDS library to provide UNIX sockets for communication between Java and Go. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from [here](https://github.com/mcfunley/juds) and go through the installation steps described in the README.
 
