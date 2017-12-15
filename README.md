@@ -16,7 +16,8 @@ The ordering service module uses the JUDS library to provide UNIX sockets for co
 Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
 
 ```
-sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh
+cd $GOROOT/src/github.com/hyperledger/fabric/
+sudo ./devenv/setupUbuntuOnPPC64le.sh
 ```
 
 Following this, you can compile HLF as follows:
@@ -51,13 +52,14 @@ The first argument is the ID of the frontend, and it should match one of the IDs
 The Go component of the frontend requires a genesis block. Generate the block as follows:
 
 ```
-./fabric/build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
+cd $GOROOT/src/github.com/hyperledger/fabric/
+./build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
 ```
 
 The `<path to genesis file>` argument should match the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file. You can now launch the Go component as follows:
 
 ```
-./fabric/build/bin/orderer start
+./build/bin/orderer start
 ```
 
 ## Running an example chaincode
@@ -65,23 +67,23 @@ The `<path to genesis file>` argument should match the absolute path in the `Gen
 To execute an example chaincode using this ordering service, generate the rest of the HLF artifacts as follows:
 
 ```
-./fabric/build/bin/configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx <path to channel creation tx> -channelID <channel ID>
-./fabric/build/bin/configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate <path to anchor peer update tx> -channelID <channel ID> -asOrg SampleOrg
+./build/bin/configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx <path to channel creation tx> -channelID <channel ID>
+./build/bin/configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate <path to anchor peer update tx> -channelID <channel ID> -asOrg SampleOrg
 ```
 
 You can now launch an endorsing peer by executing the `./fabric/build/bin/peer node start` command. You can now use a client to join a channel and install/execute chaincode as follows:
 
 ```
-./fabric/build/bin/peer channel create -o 127.0.0.1:7050 -c <channel ID> -f <path to channel creation tx>
-./fabric/build/bin/peer channel join -b ./<channel ID>.block
-./fabric/build/bin/peer channel update -o 127.0.0.1:7050 -c <channel ID> -f <path to anchor peer update tx>
-./fabric/build/bin/peer chaincode install -n <chaincode ID> -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
-./fabric/build/bin/peer chaincode instantiate -o 127.0.0.1:7050 -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
-./fabric/build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
-./fabric/build/bin/peer chaincode invoke -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["invoke","a","b","10"]}'
-./fabric/build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
-./fabric/build/bin/peer chaincode invoke -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["invoke","a","b","-10"]}'
-./fabric/build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
+./build/bin/peer channel create -o 127.0.0.1:7050 -c <channel ID> -f <path to channel creation tx>
+./build/bin/peer channel join -b ./<channel ID>.block
+./build/bin/peer channel update -o 127.0.0.1:7050 -c <channel ID> -f <path to anchor peer update tx>
+./build/bin/peer chaincode install -n <chaincode ID> -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+./build/bin/peer chaincode instantiate -o 127.0.0.1:7050 -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
+./build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
+./build/bin/peer chaincode invoke -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["invoke","a","b","10"]}'
+./build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
+./build/bin/peer chaincode invoke -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["invoke","a","b","-10"]}'
+./build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
 ```
 
 ## Running with the sample clients
@@ -93,17 +95,18 @@ Execute `go build`  at directories `./fabric/orderer/sample_clients/deliver_stdo
 Launch a client to receive the generated blocks as follows:
 
 ```
-./fabric/orderer/sample_clients/deliver_stdout/deliver_stdout --quiet --channelID <system channel ID>
+cd $GOROOT/src/github.com/hyperledger/fabric/
+./orderer/sample_clients/deliver_stdout/deliver_stdout --quiet --channelID <system channel ID>
 ```
   
 Launch a client to submit transactions to the service as follows:
 
 ```
-./fabric/orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --channelID <system channel ID> --size <size of each transaction> --messages <number of transactions to send>
+./orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --channelID <system channel ID> --size <size of each transaction> --messages <number of transactions to send>
 ```
   
 You can also create a new channel as follows:
 
 ```
-./fabric/orderer/sample_clients/broadcast_config/broadcast_config --cmd newChain --chainID <channel ID>
+./orderer/sample_clients/broadcast_config/broadcast_config --cmd newChain --chainID <channel ID>
   ```
