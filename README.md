@@ -12,18 +12,35 @@ The ordering service module uses the JUDS library to provide UNIX sockets for co
 
 ## Compiling
 
-Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile this fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing `sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh` before executing `make dist-clean all`.
+Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile this fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing `sudo ./fabric/devenv/setupUbuntuOnPPC64le.sh` before executing `make dist-clean all`. Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolute path of the `./sampleconfig` directory of the fork. Assuming you have the `$GOROOT` environment variable properly set, you should be able to do this by typing `export FABRIC_CFG_PATH=$GOROOT/src/github.com/hyperledger/fabric/sampleconfig/` in the command line.
 
-## Running with sample clients
+## Launching 4 ordering nodes and a single frontend
 
-To locally run the ordering service with 4 nodes, execute the commands bellow in the following order:
+Edit the `./hyperledger-bftmart/config/node.config`file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, execute the `startReplica.sh` script in 4 different terminals as follows:
 
-1) In the main directory of this repository, run 'launch4Replicas.sh'
-2) Still in the same directory, run 'launchProxy.sh'.
-3) Change to '[gocode directory]/src/github.com/hyperledger/fabric' (of the HLF fork)
-4) Execute 'go build'  at directories 'orderer/', 'orderer/sample_clients/deliver_stdout', and 'orderer/sample_clients/broadcast_timestamp/'
-5) Run 'orderer/orderer'
-6) Run 'orderer/sample_clients/deliver_stdout/deliver_stdout'
-7) Run 'orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --secure --messages [number of messages to send]'
+`./startReplica.sh 0`
+
+`./startReplica.sh 1`
+
+`./startReplica.sh 2`
+
+`./startReplica.sh 3`
+
+Once all nodes have outputed `Ready to process operations`, you can launch the Java component of the frontend as follows:
+
+`./startFrontend.sh 1000 10 9999`
+
+The first argument is the ID of the frontend, and it should match one of the IDs specified in the `RECEIVERS` parameter in the `./hyperledger-bftmart/config/node.config`file. The second argument is the number of connections available in the connection pool between the Go and JAva components, and it should match the `ConnectionPoolSize`parameter from the `BFTsmart` section in the `./fabric/sampleconfig/orderer.yaml` file. The third parameter is the TCP port from which the Java component delivers blocks to the Go component, and should match the `RecvPort` parameter in the previous section/file.
+
+The Go component of the frontend is launched with the `./fabric/build/bin/orderer start` command.
+
+## Running with the sample clients
+
+To submit a heavy workload of representative transactions using the sample clients available in `./fabric/sample_clients`, execute the commands bellow in the following order:
+
+1) Execute `go build`  at directories `./fabric/orderer/sample_clients/deliver_stdout` and `./fabric/orderer/sample_clients/broadcast_msg/` to compile the sample clients
+2) Generate the genesis file using the `./configtxgen -profile SampleSingleMSPBFTsmart -channelID [channelID] -outputBlock ../../genesisblock` command inside the `./fabric/build/bin/` directory.
+3) Run `orderer/sample_clients/deliver_stdout/deliver_stdout --quiet --channelID [channelID]`
+4) Run `orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --channelID [channelID] --size [size of each transaction] --messages [number of transactions to send]`
 
 For more information regarding this project, read the technical report available at  http://arxiv.org/abs/1709.06921
