@@ -71,14 +71,14 @@ cd $GOPATH/src/github.com/hyperledger/fabric/
 ./build/bin/configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate <path to anchor peer update tx> -channelID <channel ID> -asOrg SampleOrg
 ```
 
-You can now launch an endorsing peer by executing 
+With the ordering service bootstrapped, you can now launch an endorsing peer. To do so, make sure that the `fileSystemPath` parameter of the `peer` section in the `./sampleconfig/core.yaml` configuration file is set to a directory where you have write previledges. Following this, start the endorsing peer process by executing:
 
 ```
 ./build/bin/peer node start
 
 ```
 
-You can now use a client to join a channel and install/execute chaincode as follows:
+Use a client to join a channel and install/execute chaincode as follows:
 
 ```
 ./build/bin/peer channel create -o 127.0.0.1:7050 -c <channel ID> -f <path to channel creation tx>
@@ -117,3 +117,14 @@ You can also create a new channel as follows:
 ```
 ./orderer/sample_clients/broadcast_config/broadcast_config --cmd newChain --chainID <channel ID>
   ```
+
+## Running the ordering service in a distributed setting
+
+The HLF codebase provided by the fork can be configured and deployed in a distributed setting in the same way as the original. In order to make sure the distributed deployment still uses this ordering service, the genesis block must be generated from a profile that sets the ordering service type to `bftsmart`.
+
+In order to deploy the ordering nodes across multiple hosts, edit the `hyperledger-bftmart/config/host.config` file with the ip address of the hosts running each ordering node. If you want to set up more than 4 nodes, you must also edit the `hyperledger-bftmart/config/system.config` file (you need to fiddle with the parameters `system.servers.num`, `system.servers.f` and `system.initial.view`). These files must be the same across all ordering nodes, as well as the frontend.
+
+Before launching the nodes, make sure you delete the `hyperledger-bftmart/config/currentView` file in each host, to make sure that the changes to the aforementioned files take effect. Make also sure that you launch each node in numerical order (node 0, node 1, node 2, etc).
+
+Finally, keep in mind that the Java component (launched with the `startFrontend.sh` script) needs to be in the same host as the Go component (started with the `orderer start` command). Nonetheless, you only need to install the JUDS dependencies in the hosts that runs the Go and Java components.
+
