@@ -3,13 +3,6 @@
 This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around [BFT-SMaRt](https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
 For more information regarding this project, read the technical report available [here](http://arxiv.org/abs/1709.06921)
 
-## pre-requisites
-## Compiling
-## Launching 4 ordering nodes and a single frontend
-## Running an example chaincode
-## Running with the sample clients
-
-
 ## Pre-requisites
 
 This code was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1.
