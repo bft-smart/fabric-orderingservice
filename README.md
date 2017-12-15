@@ -47,7 +47,7 @@ You can now launch an endorsing peer by executing the `./fabric/build/bin/peer n
 
 `./peer channel create -o 127.0.0.1:7050 -c <channel ID> -f ../../channel.tx`
 
-`./peer channel join -b ../<channel ID>.block`
+`./peer channel join -b <channel ID>.block`
 
 `./peer channel update -o 127.0.0.1:7050 -c <channel ID> -f ../../sampleorg.tx`
 
