@@ -1,6 +1,19 @@
 # BFT ordering service for Hyperledger Fabric v1.1
 
 This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around [BFT-SMaRt](https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
+
+## Overview
+
+This ordering service has a similar architecture to the Kafka-based ordering service already provided by HLF. It is comprised by a set of 3f+1 ordering nodes and an arbitrary number of frontends, as depicted in the figure bellow. 
+
+![Architecture](https://github.com/jcs47/hyperledger-bftsmart/blob/master/bft-os.png?raw=true)
+
+The ordering nodes are equivalent to the Kafka-cluster with a Zookeeper ensemble, in the sense that they also execute a distributed consensus protocol responsible for establishing a total order on transactions. Furthermore, the frontends are equivalent to the ordering service nodes (OSNs) used by the Kafka-based ordering service, in the sense that they also relay the transactions issue by clients into the the consensus protocol. However, some key differences between this service and the Kafka-based service are:
+
+1) The ordering nodes execute a BFT consensus protocol, which means malicious nodes are unable to disrupt the service and fabricated elicit blocks (as long as they do not exceed `f` nodes out of a total of `3f+1` nodes);
+2) Whereas Kafka's OSNs receive a stream of ordered transactions, this service's frontends receive a stream of pre-generated blocks containing ECDSA signatures from 2f+1 ordering nodes;
+3) Whereas Kafka's OSNs are logically comprised by a single Go process, this service's frontends are comprised by two processes (a Java and a Go component).
+
 For more information regarding this project, read the technical report available [here](http://arxiv.org/abs/1709.06921)
 
 ## Pre-requisites
@@ -128,3 +141,18 @@ Before launching the nodes, make sure you delete the `hyperledger-bftmart/config
 
 Finally, keep in mind that the Java component (launched with the `startFrontend.sh` script) needs to be in the same host as the Go component (started with the `orderer start` command). Nonetheless, you only need to install the JUDS dependencies in the hosts that runs the Go and Java components.
 
+## State transfer and reconfiguration
+
+Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node with the `startReplica.sh` script. Then to make that node join the existing group, use the `reconfigure.sh` script as follows:
+
+```
+./reconfigure.sh <node id> <ip address> <port>
+```
+
+In order to remove a node from the group, you use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the hosts that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the host from which the `reconfigure.sh` script is executed is also given this file.
+
+## Limitations
+
+As described above, the current implementation of this ordering service supports state transfer and on-the-fly reconfiguration of the set of ordering nodes. However, this does not extends to the set of frontends yet.
+
+Since the ordering nodes execute a BFT consensus algorithm and each one produces a ECDSA signature for each block, malicious nodes are unable to manufacture ilicit blocks (as long as the number of malicious nodes in the system do not exceed `f`). However, because these node execute seperately from the rest of the HLF plattform, they perform minimal verifications on the transactions; verification of the endorsing peers' signatures and policies are done at the frontends, before they submit transactions to the consensus algorithm. This means that a malicious frontend is still able to skip these verifications and submit non-complient transactions to the consenus algorithm. Nonetheless, the BFT consensus algorithm ensures that all nodes receive transactions by the same order and generate the same blocks at each node. Ultimately, ledger(s) may contain elicit transactions, but legit transactions cannot be prevented from being added to the ledger(s).
