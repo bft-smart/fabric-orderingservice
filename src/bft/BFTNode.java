@@ -493,7 +493,14 @@ public class BFTNode extends DefaultRecoverable {
             
             Common.Block block = createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
 
-            if (config) lastConfig = block.getHeader().getNumber();
+            if (config) {
+                
+                Common.Envelope env = Common.Envelope.parseFrom(batch[0]);
+                Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
+                Common.ChannelHeader chanHeader = Common.ChannelHeader.parseFrom(payload.getHeader().getChannelHeader());
+                if (chanHeader.getType() == Common.HeaderType.CONFIG_VALUE)
+                    lastConfig = block.getHeader().getNumber();
+            }
                 
             countBlocks++;
 
