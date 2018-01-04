@@ -63,7 +63,6 @@ public class BFTProxy {
     private static long BatchTimeout = 0;
     private static int initID;
     private static int nextID;
-    private static String systemChannelID = null;
 
     private static ProxyReplyListener sysProxy;
         
@@ -149,9 +148,7 @@ public class BFTProxy {
                 DataOutputStream os = new DataOutputStream(sendSocket.getOutputStream());
 
                 String channel = readString(is);
-                
-                if (isSysChannel) systemChannelID = channel;
-                
+                                
                 byte[] bytes = readBytes(is);
                 
                 outputs.put(channel, os);

@@ -14,6 +14,7 @@ import bftsmart.tom.util.TOMUtil;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -47,6 +48,9 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     //used to detected updates to the view
     private int nextView;
     private View[] views;
+    
+    //used to extract latest sequence number
+    private int[] sequences;
         
     public ProxyReplyListener(int id) {
         super(id);
@@ -85,6 +89,12 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         
         nextView = getViewManager().getCurrentViewId();
         views = new View[getViewManager().getCurrentViewN()];
+        
+        sequences = new int[getViewManager().getCurrentViewN()];
+        for (int i = 0; i < sequences.length; i++) {
+            
+            sequences[i] = -1;
+        }
     }
     
     private View newView(byte[] bytes) {
@@ -93,23 +103,38 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         return (o != null && o instanceof View ? (View) o : null);
     }
     
+    private int newSequence(byte[] bytes) {
+        
+        try {
+            byte[][] contents = deserializeContents(bytes);
+            
+            return ((new String(contents[0])).equals("SEQUENCE") ? ByteBuffer.wrap(contents[1]).getInt() : -1);
+            
+        } catch (IOException ex) {
+            
+            return -1;
+        }
+    }
+    
     @Override
     public void replyReceived(TOMMessage tomm) {
-        
-        logger.debug("Replica " + tomm.getSender());
-        logger.debug("Sequence " + tomm.getSequence());
                 
         View v = null;
+        int s = -1;
         
         try {
 
             canReceiveLock.lock();
             
-            if ((v = newView(tomm.getContent())) != null) {
+            if ((v = newView(tomm.getContent())) != null) { // am I receiving a new view?
             
                 processReplyView(tomm, v);
                 
-            } else {
+            } else if ((s = newSequence(tomm.getContent())) != -1) { // am I being updated on the sequence number?
+                                
+                processReplySequence(tomm, s);
+                
+            } else { // I am receiving blocks
                 
                 processReplyBlock(tomm);
             }
@@ -122,6 +147,42 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         }
     }
 
+    private void processReplySequence(TOMMessage tomm, int s) {
+        
+        int sameContent = 1;
+
+        int pos = getViewManager().getCurrentViewPos(tomm.getSender());
+
+        sequences[pos] = s;
+        
+        for (int i = 0; i < sequences.length; i++) {
+
+            if ((sequences[i] != -1) && (i != pos || getViewManager().getCurrentViewN() == 1)
+                                && (tomm.getReqType() != TOMMessageType.ORDERED_REQUEST || sequences[i] == s)) {
+
+                sameContent++;
+
+            }
+        }
+        
+        if (sameContent >= replyQuorum) {
+
+            System.out.println("Updating ProxyListener to sequence " + s);
+
+            next = s;
+
+            sequences = new int[getViewManager().getCurrentViewN()];
+            
+            for (int i = 0; i < sequences.length; i++) {
+            
+                sequences[i] = -1;
+        
+            }
+
+        }
+        
+    }
+    
     private void processReplyView (TOMMessage tomm, View v) {
                         
         int sameContent = 1;
