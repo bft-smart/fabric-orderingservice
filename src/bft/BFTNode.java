@@ -26,6 +26,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
@@ -382,7 +383,11 @@ public class BFTNode extends DefaultRecoverable {
                     blockCutter = new BlockCutter(command);
                 }
 
-                return new byte[0];
+                byte[][] reply = new byte[2][];
+                reply[0] = "SEQUENCE".getBytes();
+                reply[1] = ByteBuffer.allocate(4).putInt(this.sequence).array();
+                
+                return serializeContents(reply);
             }
                        
             if (Arrays.equals("GETVIEW".getBytes(), command)) {
@@ -1027,8 +1032,12 @@ public class BFTNode extends DefaultRecoverable {
         @Override
         public void manageReply(TOMMessage tomm, MessageContext mc) {
             
-            if (!receivers.contains(tomm.getSender()))
+            // send reply only if it is one of the clients from the connection pool or if it is the first message of the proxy
+            if (!receivers.contains(tomm.getSender()) || (receivers.contains(tomm.getSender()) && tomm.getSequence() == 0)) {
+                
                 super.manageReply(tomm, mc);
+            
+            }
         }
 
     }
