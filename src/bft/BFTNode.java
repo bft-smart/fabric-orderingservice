@@ -67,7 +67,9 @@ import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
 import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 import org.hyperledger.fabric.protos.common.Common;
+import org.hyperledger.fabric.protos.common.Configtx;
 import org.hyperledger.fabric.protos.msp.Identities;
+import org.hyperledger.fabric.protos.orderer.Configuration;
 
 /**
  *
@@ -144,6 +146,8 @@ public class BFTNode extends DefaultRecoverable {
         
         this.sequence = 0;
         this.lastBlockHeaders = new TreeMap<>();
+        
+        this.blockCutter = new BlockCutter();
                 
         //logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
         //logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
@@ -373,22 +377,6 @@ public class BFTNode extends DefaultRecoverable {
     private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) throws IOException {
 
         if (receivers.contains(msgCtx.getSender())) {
-            
-            if (msgCtx.getSequence() == 0) {
-
-                if (blockCutter == null) {
-                    
-                    logger.info("Initializing blockcutter");
-                    
-                    blockCutter = new BlockCutter(command);
-                }
-
-                byte[][] reply = new byte[2][];
-                reply[0] = "SEQUENCE".getBytes();
-                reply[1] = ByteBuffer.allocate(4).putInt(this.sequence).array();
-                
-                return serializeContents(reply);
-            }
                        
             if (Arrays.equals("GETVIEW".getBytes(), command)) {
                 
@@ -397,14 +385,31 @@ public class BFTNode extends DefaultRecoverable {
             }
             
             RequestTuple tuple = deserializeRequest(command);
+            
+            if (tuple.type.equals("SEQUENCE")) {
+
+                byte[][] reply = new byte[2][];
+                reply[0] = "SEQUENCE".getBytes();
+                reply[1] = ByteBuffer.allocate(4).putInt(this.sequence).array();
+                
+                return serializeContents(reply);
+            }
 
             if (tuple.type.equals("NEWCHANNEL")) {
                                              
                 if (tuple.channelID != null && lastBlockHeaders.get(tuple.channelID) == null) {
+                    
+                    ByteBuffer buff = ByteBuffer.wrap(tuple.payload);
+                    
+                    long preferredMaxBytes = buff.getLong();
+                    long maxMessageCount = buff.getLong();
+                    
+                    this.blockCutter.setBatchParms(tuple.channelID, preferredMaxBytes, maxMessageCount);
+                    
+                    byte[] bytes = new byte[tuple.payload.length - (Long.BYTES*2)];
+                    buff.get(bytes);
 
-                    Common.BlockHeader header = null;
-
-                    header = Common.BlockHeader.parseFrom(tuple.payload);
+                    Common.BlockHeader header = Common.BlockHeader.parseFrom(bytes);
                 
                     lastBlockHeaders.put(tuple.channelID, header);
 
@@ -425,7 +430,7 @@ public class BFTNode extends DefaultRecoverable {
                 return new byte[0];
             }
             
-            if (tuple.type.equals("TIMEOUT") && (blockCutter != null)) {
+            if (tuple.type.equals("TIMEOUT")) {
                 
                 
                 logger.info("Purging blockcutter for channel " + tuple.channelID);
@@ -489,7 +494,7 @@ public class BFTNode extends DefaultRecoverable {
 
     }
 
-    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus, String channel, boolean config) {
+    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus, String channel, boolean isConfig) {
         try {
 
             if (blockMeasurementStartTime == -1) {
@@ -498,13 +503,31 @@ public class BFTNode extends DefaultRecoverable {
             
             Common.Block block = createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
 
-            if (config) {
+            if (isConfig) {
                 
                 Common.Envelope env = Common.Envelope.parseFrom(batch[0]);
                 Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
                 Common.ChannelHeader chanHeader = Common.ChannelHeader.parseFrom(payload.getHeader().getChannelHeader());
-                if (chanHeader.getType() == Common.HeaderType.CONFIG_VALUE)
+
+                logger.info("Creating configuration block for " + channel + "with code: " + chanHeader.getType());
+
+                if (chanHeader.getType() == Common.HeaderType.CONFIG_VALUE) {
                     lastConfig = block.getHeader().getNumber();
+                    
+                    logger.info("Latest block with config update for "+ channel +" = #" + lastConfig);
+                    
+                    Configtx.ConfigEnvelope confEnv = Configtx.ConfigEnvelope.parseFrom(payload.getData());
+                
+                    Map<String,Configtx.ConfigGroup> groups = confEnv.getConfig().getChannelGroup().getGroupsMap();
+                    
+                    Configuration.BatchSize batchsize = Configuration.BatchSize.parseFrom(groups.get("Orderer").getValuesMap().get("BatchSize").getValue());
+                    
+                    long preferredMaxBytes = batchsize.getPreferredMaxBytes();
+                    long maxMessageCount = batchsize.getMaxMessageCount();
+
+                    blockCutter.setBatchParms(channel, preferredMaxBytes, maxMessageCount);
+
+                }
             }
                 
             countBlocks++;
@@ -535,7 +558,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 }
 
-                currentSST.input(block, msgCtx, this.sequence, channel, config, lastConfig);
+                currentSST.input(block, msgCtx, this.sequence, channel, isConfig, lastConfig);
                 sigIndex++;
             }
             

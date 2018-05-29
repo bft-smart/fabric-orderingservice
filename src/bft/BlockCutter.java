@@ -31,11 +31,11 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class BlockCutter {
     
-    private Map<String, List<byte[]>> pendingBatches;
-       
-    private long PreferredMaxBytes = 0;
-    private long MaxMessageCount = 0;
-    private Map<String, Integer>  pendingBatchSizeBytes;
+    //These maps comprise the state of the blockcutter relevant to the state machine
+    private Map<String, List<byte[]>> pendingBatches;       
+    private Map<String, Long> PreferredMaxBytes;
+    private Map<String, Long> MaxMessageCount;
+    private Map<String, Integer> pendingBatchSizeBytes;
     
     private Log logger;
 
@@ -44,11 +44,13 @@ public class BlockCutter {
         logger = LogFactory.getLog(BlockCutter.class);
         
         pendingBatches = new TreeMap<>();
-        pendingBatchSizeBytes = new TreeMap<>();
+        pendingBatchSizeBytes = new TreeMap<>();       
+        PreferredMaxBytes = new TreeMap<>();
+        MaxMessageCount = new TreeMap<>();
         
     }
     
-    public BlockCutter(byte [] bytes) {
+    /*public BlockCutter(byte [] bytes) {
         
         logger = LogFactory.getLog(BlockCutter.class);
         
@@ -56,7 +58,8 @@ public class BlockCutter {
         pendingBatchSizeBytes = new TreeMap<>();
         
         setBatchParms(bytes);
-    }
+    }*/
+    
     
     public List<byte[][]> ordered(String channel, byte [] env, boolean isolated) throws IOException {
        
@@ -68,7 +71,7 @@ public class BlockCutter {
         LinkedList batches = new LinkedList<>();
         int messageSizeBytes = messageSizeBytes(env);
                 
-        if (isolated ||  messageSizeBytes > PreferredMaxBytes) {
+        if (isolated ||  messageSizeBytes > PreferredMaxBytes.get(channel)) {
 
 		if (isolated) {
 			logger.debug("Found message which requested to be isolated, cutting into its own batch");
@@ -93,7 +96,7 @@ public class BlockCutter {
 
         //int messageSizeBytes = (env != null ? env.length : 0);
         
-        boolean messageWillOverflowBatchSizeBytes = pendingBatchSizeBytes.get(channel) + messageSizeBytes > PreferredMaxBytes;
+        boolean messageWillOverflowBatchSizeBytes = pendingBatchSizeBytes.get(channel) + messageSizeBytes > PreferredMaxBytes.get(channel);
         
         if (messageWillOverflowBatchSizeBytes) {
             
@@ -107,7 +110,7 @@ public class BlockCutter {
 	pendingBatches.get(channel).add(env);
 	pendingBatchSizeBytes.put(channel, (pendingBatchSizeBytes.get(channel) + messageSizeBytes));
         
-        if (pendingBatches.get(channel).size() >= MaxMessageCount) {
+        if (pendingBatches.get(channel).size() >= MaxMessageCount.get(channel)) {
             
             logger.debug("Batch size met, cutting batch");
             batches.add(cut(channel));
@@ -134,21 +137,14 @@ public class BlockCutter {
 	return env.getPayload().size() + env.getSignature().size();
     }
     
-    private void setBatchParms(byte[] bytes) {
-        try {
-            ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
-            ObjectInput in = new ObjectInputStream(bis);
-            PreferredMaxBytes =  in.readLong();
-            MaxMessageCount =  in.readLong();
-            in.close();
-            bis.close();
- 
-            logger.info("Read PreferredMaxBytes: " + PreferredMaxBytes);
-            logger.info("Read MaxMessageCount: " + MaxMessageCount);
-            
-        } catch (IOException ex) {
-            Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    public void setBatchParms(String channel, long preferredMaxBytes, long maxMessageCount) {
+
+            PreferredMaxBytes.put(channel, preferredMaxBytes);
+            MaxMessageCount.put(channel, maxMessageCount);
+
+            logger.info("Updated PreferredMaxBytes: " + PreferredMaxBytes);
+            logger.info("Updated MaxMessageCount: " + MaxMessageCount);
+
     }
     
     public byte[] serialize() throws IOException {
@@ -171,6 +167,24 @@ public class BlockCutter {
         b.close();
         o.close();
             
+        //serialize max bytes
+        b = new ByteArrayOutputStream();
+        o = new ObjectOutputStream(b);
+        o.writeObject(PreferredMaxBytes);
+        o.flush();
+        byte[] max = b.toByteArray();
+        b.close();
+        o.close();
+        
+        //serialize message count
+        b = new ByteArrayOutputStream();
+        o = new ObjectOutputStream(b);
+        o.writeObject(MaxMessageCount);
+        o.flush();
+        byte[] count = b.toByteArray();
+        b.close();
+        o.close();
+        
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bos);
                 
@@ -185,9 +199,15 @@ public class BlockCutter {
 
         out.flush();
         bos.flush();
-      
-        out.writeLong(PreferredMaxBytes);
-        out.writeLong(MaxMessageCount);
+
+        out.writeInt(max.length);
+        out.write(max);
+
+        out.flush();
+        bos.flush();
+        
+        out.writeInt(count.length);
+        out.write(count);
 
         out.flush();
         bos.flush();
@@ -223,8 +243,25 @@ public class BlockCutter {
 
         }
         
-        PreferredMaxBytes = in.readLong();
-        MaxMessageCount = in.readLong();
+        byte[] max = new byte[0];
+        n = in.readInt();
+
+        if (n > 0) {
+
+            max = new byte[n];
+            in.read(max);
+
+        }
+        
+        byte[] count = new byte[0];
+        n = in.readInt();
+
+        if (n > 0) {
+
+            count = new byte[n];
+            in.read(count);
+
+        }
         
         in.close();
         bis.close();
@@ -241,6 +278,20 @@ public class BlockCutter {
             
         i = new ObjectInputStream(b);
         this.pendingBatchSizeBytes = (Map<String,Integer>) i.readObject();
+        i.close();
+        b.close();
+        
+        b = new ByteArrayInputStream(max);
+            
+        i = new ObjectInputStream(b);
+        this.PreferredMaxBytes = (Map<String,Long>) i.readObject();
+        i.close();
+        b.close();
+        
+        b = new ByteArrayInputStream(count);
+            
+        i = new ObjectInputStream(b);
+        this.MaxMessageCount = (Map<String,Long>) i.readObject();
         i.close();
         b.close();
     }

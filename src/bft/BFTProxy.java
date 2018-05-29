@@ -21,9 +21,11 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Timer;
@@ -37,6 +39,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.hyperledger.fabric.protos.common.Common;
+import org.hyperledger.fabric.protos.common.Configtx;
+import org.hyperledger.fabric.protos.orderer.Configuration;
 
 /**
  *
@@ -60,7 +64,7 @@ public class BFTProxy {
 
     private static long PreferredMaxBytes = 0;
     private static long MaxMessageCount = 0;
-    private static long BatchTimeout = 0;
+    private static Map<String, Long> BatchTimeout;
     private static int initID;
     private static int nextID;
 
@@ -122,23 +126,11 @@ public class BFTProxy {
             
             outputs = new TreeMap<>();
             timers = new TreeMap<>();
+            BatchTimeout = new TreeMap<>();
                         
-            PreferredMaxBytes = readInt();
-
-            logger.info("Read PreferredMaxBytes: " + PreferredMaxBytes);
-
-            MaxMessageCount = readInt();
-
-            logger.info("Read MaxMessageCount: " + MaxMessageCount);
-            
-            BatchTimeout = readLong(is);
-
-            logger.info("Read BatchTimeout: " + BatchTimeout);
-            
-            sysProxy.invokeAsynchRequest(serializeBatchParams(), null, TOMMessageType.ORDERED_REQUEST);
-                        
-            boolean isSysChannel = true;
-           
+            // request latest reply sequence from the ordering nodes
+            sysProxy.invokeAsynchRequest(serializeRequest("SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+                                   
             new SenderThread().start();
 
             while (true) { // wait for the creation of new channels
@@ -152,14 +144,29 @@ public class BFTProxy {
                 byte[] bytes = readBytes(is);
                 
                 outputs.put(channel, os);
+                
+                PreferredMaxBytes = readInt();
+
+                logger.info("Read PreferredMaxBytes: " + PreferredMaxBytes);
+
+                MaxMessageCount = readInt();
+
+                logger.info("Read MaxMessageCount: " + MaxMessageCount);
+
+                BatchTimeout.put(channel, readLong(is));
+
+                logger.info("Read BatchTimeout: " + BatchTimeout.get(channel));
+                
+                ByteBuffer buffer = ByteBuffer.allocate((Long.BYTES*2) + bytes.length);
+                buffer.putLong(PreferredMaxBytes);
+                buffer.putLong(MaxMessageCount);
+                buffer.put(bytes);
                
-                sysProxy.invokeAsynchRequest(serializeRequest("NEWCHANNEL", channel, bytes), null, TOMMessageType.ORDERED_REQUEST);
+                sysProxy.invokeAsynchRequest(serializeRequest("NEWCHANNEL", channel, buffer.array()), null, TOMMessageType.ORDERED_REQUEST);
                 
                 Timer timer = new Timer();
-                timer.schedule(new BatchTimeout(channel), (BatchTimeout / 1000000));
+                timer.schedule(new BatchTimeout(channel), (BatchTimeout.get(channel) / 1000000));
                 timers.put(channel, timer);
-
-                isSysChannel = false;
                 
                 logger.info("Setting up system for new channel '" + channel + "'");
 
@@ -256,7 +263,7 @@ public class BFTProxy {
         
         if (timers.get(channel) != null) timers.get(channel).cancel();
         Timer timer = new Timer();
-        timer.schedule(new BatchTimeout(channel), (BatchTimeout / 1000000));
+        timer.schedule(new BatchTimeout(channel), (BatchTimeout.get(channel) / 1000000));
         timers.put(channel, timer);
     }
     
@@ -387,6 +394,26 @@ public class BFTProxy {
                     try {
                         String[] params = reply.getKey().split("\\:");
                         
+                        boolean isConfig = Boolean.parseBoolean(params[1]);
+                        
+                        if (isConfig) { //if config block, make sure to update the timeout in case it was changed
+                            
+                            Common.Envelope env = Common.Envelope.parseFrom(reply.getValue().getData().getData(0));
+                            Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
+                            Common.ChannelHeader chanHeader = Common.ChannelHeader.parseFrom(payload.getHeader().getChannelHeader());
+
+                            if (chanHeader.getType() == Common.HeaderType.CONFIG_VALUE) {
+                            
+                                Configtx.ConfigEnvelope confEnv = Configtx.ConfigEnvelope.parseFrom(payload.getData());
+                                Map<String,Configtx.ConfigGroup> groups = confEnv.getConfig().getChannelGroup().getGroupsMap();
+                                Configuration.BatchTimeout timeout = Configuration.BatchTimeout.parseFrom(groups.get("Orderer").getValuesMap().get("BatchTimeout").getValue());
+
+                                Duration duration = Duration.parse("PT"+timeout.getTimeout().trim().replaceAll("\\s+",""));
+                                BatchTimeout.put(params[0], duration.toNanos());
+                            
+                            }
+                        }
+                        
                         byte[] bytes = reply.getValue().toByteArray();
                         DataOutputStream os = outputs.get(params[0]);
                         
@@ -394,7 +421,7 @@ public class BFTProxy {
                         os.write(bytes);
                         
                         os.writeLong(1);
-                        os.write(Boolean.parseBoolean(params[1]) ? (byte) 1 : (byte) 0);                    
+                        os.write(isConfig ? (byte) 1 : (byte) 0);                    
                         
                     } catch (IOException ex) {
                         ex.printStackTrace();
@@ -422,7 +449,7 @@ public class BFTProxy {
                 sysProxy.cleanAsynchRequest(reqId);
                 
                 Timer timer = new Timer();
-                timer.schedule(new BatchTimeout(this.channel), (BatchTimeout / 1000000));
+                timer.schedule(new BatchTimeout(this.channel), (BatchTimeout.get(channel) / 1000000));
                 
                 timers.put(this.channel, timer);
             } catch (IOException ex) {
