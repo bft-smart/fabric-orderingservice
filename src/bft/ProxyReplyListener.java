@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hyperledger.fabric.protos.common.Common;
@@ -300,8 +302,12 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             @Override
             public void run() {
 
-                invokeAsynchRequest("GETVIEW".getBytes(), getViewManager().getCurrentViewProcesses(),
-                        null, TOMMessageType.ORDERED_REQUEST);
+                try {
+                    invokeAsynchRequest(BFTProxy.assembleSignedRequest("GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
+                            null, TOMMessageType.ORDERED_REQUEST);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
 
             }
 

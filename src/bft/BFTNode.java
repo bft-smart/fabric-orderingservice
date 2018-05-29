@@ -10,6 +10,7 @@ import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
 import bftsmart.tom.server.defaultservices.DefaultReplier;
+import bftsmart.tom.util.TOMUtil;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.BufferedReader;
@@ -17,6 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileReader;
@@ -32,6 +34,7 @@ import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.SignatureException;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -374,18 +377,42 @@ public class BFTNode extends DefaultRecoverable {
         return replies;
     }
 
+    private boolean verifySignature(int id, RequestTuple tuple) {
+        try {
+            PublicKey key = replica.getReplicaContext().getStaticConfiguration().getRSAPublicKey(id);
+            
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            DataOutput out = new DataOutputStream(bos);
+            
+            out.writeUTF(tuple.type);
+            out.writeUTF(tuple.channelID);
+            out.writeInt(tuple.payload.length);
+            out.write(tuple.payload);
+            
+            bos.flush();
+            bos.close();
+            
+            return TOMUtil.verifySignature(key, bos.toByteArray(), tuple.signature);
+            
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+    
     private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) throws IOException {
 
         if (receivers.contains(msgCtx.getSender())) {
+            
+            RequestTuple tuple = deserializeSignedRequest(command);
+            if (!verifySignature(msgCtx.getSender(),tuple)) return new byte[0];
                        
-            if (Arrays.equals("GETVIEW".getBytes(), command)) {
+            if (tuple.type.equals("GETSVIEW")) {
                 
                 logger.info("A proxy is trying to fetch the most current view");
                 return new byte[0];
             }
-            
-            RequestTuple tuple = deserializeRequest(command);
-            
+                        
             if (tuple.type.equals("SEQUENCE")) {
 
                 byte[][] reply = new byte[2][];
@@ -872,10 +899,39 @@ public class BFTNode extends DefaultRecoverable {
       
         bis.close();
         
-        return new RequestTuple(type, channelID, payload);
+        return new RequestTuple(type, channelID, payload, null);
         
     }
             
+    private RequestTuple deserializeSignedRequest(byte[] request) throws IOException {
+        
+        ByteArrayInputStream bis = new ByteArrayInputStream(request);
+        DataInput in = new DataInputStream(bis);
+        
+        int l = in.readInt();
+        byte[] msg = new byte[l];
+        in.readFully(msg);
+        l = in.readInt();
+        byte[] sig = new byte[l];
+        in.readFully(sig);
+        
+        bis.close();
+        
+        bis = new ByteArrayInputStream(msg);
+        in = new DataInputStream(bis);
+        
+        String type = in.readUTF();
+        String channelID = in.readUTF();
+        l = in.readInt();
+        byte[] payload = new byte[l];
+        in.readFully(payload);
+      
+        bis.close();
+        
+        return new RequestTuple(type, channelID, payload, sig);
+        
+    }
+    
     @Override
     public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
         return new byte[0];
@@ -1040,13 +1096,14 @@ public class BFTNode extends DefaultRecoverable {
         String type = null;
         String channelID = null;
         byte[] payload = null;
+        byte[] signature = null;
 
-        RequestTuple(String type, String channelID, byte[] payload) {
+        RequestTuple(String type, String channelID, byte[] payload, byte[] signature) {
 
             this.type = type;
             this.channelID = channelID;
             this.payload = payload;
-
+            this.signature = signature;
         }
     }
 

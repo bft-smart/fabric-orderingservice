@@ -9,6 +9,7 @@ import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
+import bftsmart.tom.util.TOMUtil;
 import com.etsy.net.JUDS;
 import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
@@ -25,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.PrivateKey;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
@@ -129,7 +131,7 @@ public class BFTProxy {
             BatchTimeout = new TreeMap<>();
                         
             // request latest reply sequence from the ordering nodes
-            sysProxy.invokeAsynchRequest(serializeRequest("SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            sysProxy.invokeAsynchRequest(assembleSignedRequest("SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
                                    
             new SenderThread().start();
 
@@ -162,7 +164,7 @@ public class BFTProxy {
                 buffer.putLong(MaxMessageCount);
                 buffer.put(bytes);
                
-                sysProxy.invokeAsynchRequest(serializeRequest("NEWCHANNEL", channel, buffer.array()), null, TOMMessageType.ORDERED_REQUEST);
+                sysProxy.invokeAsynchRequest(assembleSignedRequest("NEWCHANNEL", channel, buffer.array()), null, TOMMessageType.ORDERED_REQUEST);
                 
                 Timer timer = new Timer();
                 timer.schedule(new BatchTimeout(channel), (BatchTimeout.get(channel) / 1000000));
@@ -268,7 +270,7 @@ public class BFTProxy {
     }
     
     private static byte[] serializeRequest(String type, String channelID, byte[] payload) throws IOException {
-
+            
         ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
         DataOutput out = new DataOutputStream(bos);
 
@@ -280,9 +282,41 @@ public class BFTProxy {
         bos.flush();
 
         bos.close();
-
+        
         return bos.toByteArray();
+    }
+    
+    public static byte[] assembleSignedRequest(String type, String channelID, byte[] payload) throws IOException {
+            
+        PrivateKey key = sysProxy.getViewManager().getStaticConf().getRSAPrivateKey();        
+            
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
+        DataOutput out = new DataOutputStream(bos);
 
+        out.writeUTF(type);
+        out.writeUTF(channelID);
+        out.writeInt(payload.length);
+        out.write(payload);
+
+        bos.flush();
+        bos.close();
+
+        byte[] msg = bos.toByteArray();
+        
+        byte[] sig = TOMUtil.signMessage(key, msg);
+        
+        bos = new ByteArrayOutputStream(msg.length+sig.length);
+        out = new DataOutputStream(bos);
+        
+        out.writeInt(msg.length);
+        out.write(msg);
+        out.writeInt(sig.length);
+        out.write(sig);
+        
+        bos.flush();
+        bos.close();
+        
+        return bos.toByteArray();
     }
             
     private static class ReceiverThread extends Thread {
@@ -445,7 +479,7 @@ public class BFTProxy {
         public void run() {
             
             try {
-                int reqId = sysProxy.invokeAsynchRequest(serializeRequest("TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
+                int reqId = sysProxy.invokeAsynchRequest(assembleSignedRequest("TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
                 sysProxy.cleanAsynchRequest(reqId);
                 
                 Timer timer = new Timer();
