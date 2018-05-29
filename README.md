@@ -84,6 +84,8 @@ cd $GOPATH/src/github.com/hyperledger/fabric/
 ./build/bin/configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate <path to anchor peer update tx> -channelID <channel ID> -asOrg SampleOrg
 ```
 
+Note that the channel ID that you use for generating the channel creation transaction must be different that the one used to generate the genesis block. When creating the genesis block, you specify the ID for the *system channel*, whereas when generating the channel creating transaction, you are going to request a new *normal channel* to be created.
+
 With the ordering service bootstrapped, you can now launch an endorsing peer. To do so, make sure that the `fileSystemPath` parameter of the `peer` section in the `./sampleconfig/core.yaml` configuration file is set to a directory where you have write previledges. Following this, start the endorsing peer process by executing:
 
 ```
