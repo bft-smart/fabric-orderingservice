@@ -499,24 +499,16 @@ public class BFTNode extends DefaultRecoverable {
 
         logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
 
-        String mspid = extractMSPID(tuple.payload);
-        if (mspid != null && this.mspid.equals(mspid)) {
-        
-            batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
+        batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
 
-            if (batches != null) {
+        if (batches != null) {
 
-                for (int i = 0; i < batches.size(); i++) {
-                    assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
-                }
-
+            for (int i = 0; i < batches.size(); i++) {
+                assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
             }
+
+        }
             
-        }
-        else {
-            logger.info((mspid == null ? "Malformed envelope" : "Envelope's MSPID is unknown")+", discarding");
-        }
-        
         return "ACK".getBytes();
 
     }
