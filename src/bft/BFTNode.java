@@ -5,37 +5,33 @@
  */
 package bft;
 
+import bftsmart.reconfiguration.util.TOMConfiguration;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.server.defaultservices.DefaultRecoverable;
 import bftsmart.tom.server.defaultservices.DefaultReplier;
-import bftsmart.tom.util.TOMUtil;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInput;
 import java.io.DataInputStream;
-import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
-import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
-import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.Security;
 import java.security.SignatureException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -50,22 +46,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.LineIterator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.bouncycastle.asn1.ASN1Integer;
-import org.bouncycastle.asn1.ASN1OutputStream;
-import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.openssl.PEMKeyPair;
-import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
-import org.bouncycastle.util.io.pem.PemObject;
-import org.bouncycastle.util.io.pem.PemWriter;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
 import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
@@ -73,6 +60,7 @@ import org.hyperledger.fabric.protos.common.Common;
 import org.hyperledger.fabric.protos.common.Configtx;
 import org.hyperledger.fabric.protos.msp.Identities;
 import org.hyperledger.fabric.protos.orderer.Configuration;
+import org.hyperledger.fabric.sdk.helper.Config;
 
 /**
  *
@@ -82,29 +70,35 @@ public class BFTNode extends DefaultRecoverable {
 
     public final static String DEFAULT_CONFIG_FOLDER = "./config/";
 
-    private int id;
+    private final int id;
+    private final CryptoPrimitives crypto;
+    private final Log logger;
+    private final String configFolder;
+    private final TOMConfiguration replicaConf;
     private ServiceReplica replica = null;
-    private CryptoPrimitives crypto;
-    private Log logger;
-    private String configFolder;
 
-    // MSP stuff
+    // Own MSP artifacts
     private String mspid = null;
     private PrivateKey privKey = null;
-    private X509CertificateHolder certificate = null;
+    private X509Certificate certificate = null;
     private byte[] serializedCert = null;
     private Identities.SerializedIdentity ident;
+    
+    //envelope validation stuff
+    private boolean bothSigs;
+    private boolean envValidation;
+    private long timeWindow;
 
     //signature thread stuff
     private int parallelism;
-    LinkedBlockingQueue<SignerSenderThread> queue;
+    LinkedBlockingQueue<BlockWorkerThread> queue;
     private ExecutorService executor = null;
     private int blocksPerThread;
     private int sigIndex = 0;
-    private SignerSenderThread currentSST = null;
+    private BlockWorkerThread currentSST = null;
 
     //measurements
-    private int interval = 10000;
+    private final int interval = 10000;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
     private long sigsMeasurementStartTime = -1;
@@ -112,30 +106,37 @@ public class BFTNode extends DefaultRecoverable {
     private int countBlocks = 0;
     private int countSigs = 0;
     
-    //used to avoid the signing threads from accessing a null pointer in 'replica'
-    private Lock replicaLock;
-    private Condition replicaReady;
+    //used to avoid the block worker threads from accessing a null pointer in 'replica'
+    private final Lock replicaLock;
+    private final Condition replicaReady;
 
     //these attributes are the state of this replicated state machine
-    private Set<Integer> receivers;
     private BlockCutter blockCutter;
     private int sequence = 0;
-    private long lastConfig = 0;
+    private MSPManager mspManager = null;
     private Map<String,Common.BlockHeader> lastBlockHeaders;
+    
+    // these are treated as SMR state, but so far they are updated only at replica start up or upon system channel creation.
     private String sysChannel = "";
+    private Common.Block sysGenesis;
+    private Set<Integer> receivers;
 
-    public BFTNode(int id, String configFolder) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException {
+    
+    public BFTNode(int id, String configFolder) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException, CertificateException {
 
         this.replicaLock = new ReentrantLock();
         this.replicaReady = replicaLock.newCondition();
 
         this.id = id;
         this.configFolder = (configFolder != null ? configFolder : BFTNode.DEFAULT_CONFIG_FOLDER);
+        
+        this.replicaConf = new TOMConfiguration(this.id, this.configFolder);
 
         loadConfig();
-        
+                
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
+        BFTCommon.init(crypto);
         
         this.logger = LogFactory.getLog(BFTNode.class);
 
@@ -144,42 +145,48 @@ public class BFTNode extends DefaultRecoverable {
 
         for (int i = 0; i < parallelism; i++) {
 
-            this.executor.execute(new SignerSenderThread(this.queue));
+            this.executor.execute(new BlockWorkerThread(this.queue));
         }
         
         this.sequence = 0;
         this.lastBlockHeaders = new TreeMap<>();
-        
-        this.blockCutter = new BlockCutter();
+
+        //this.lastConfigs = new TreeMap<>();
+        //this.chanConfigs = new TreeMap<>();
+
+        this.blockCutter = BlockCutter.getInstance();
                 
-        //logger.info("This is the signature algorithm: " + this.crypto.getSignatureAlgorithm());
-        //logger.info("This is the hash algorithm: " + this.crypto.getHashAlgorithm());
+        logger.info("Starting up ordering node with system channel " + this.sysChannel);
+        logger.info("This is the signature algorithm: " + this.crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
+        logger.info("This is the hash algorithm: " + this.crypto.getProperties().getProperty(Config.HASH_ALGORITHM));
         
-        this.replica = new ServiceReplica(this.id, this.configFolder, this, this, null, new NoopReplier());
-        
+        this.mspManager = MSPManager.getInstance(mspid, sysChannel);
+                
+        this.replica = new ServiceReplica(this.id, this.configFolder, this, this, null,
+                
+            new DefaultReplier() {
+
+                @Override
+                public void manageReply(TOMMessage tomm, MessageContext mc) {
+
+                    // send reply only if it is one of the clients from the connection pool or if it is the first message of the proxy
+                    if (!receivers.contains(tomm.getSender()) || (receivers.contains(tomm.getSender()) && tomm.getSequence() == 0)) {
+
+                        super.manageReply(tomm, mc);
+
+                    }
+                }
+
+            }
+        );
+                
         this.replicaLock.lock();
         this.replicaReady.signalAll();
         this.replicaLock.unlock();
         
     }
-
-    private String extractMSPID(byte[] bytes) {
-        try {
-            Common.Envelope env = Common.Envelope.parseFrom(bytes);
-            Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
-            Common.SignatureHeader sigHeader = Common.SignatureHeader.parseFrom(payload.getHeader().getSignatureHeader());
-            Identities.SerializedIdentity ident = Identities.SerializedIdentity.parseFrom(sigHeader.getCreator());
-            return ident.getMspid();
-            
-            
-        } catch (InvalidProtocolBufferException ex) {
-            //ex.printStackTrace();
-            return null;
-        }
-        
-    }
     
-    private void loadConfig() throws IOException {
+    private void loadConfig() throws IOException, CertificateException {
         
         LineIterator it = FileUtils.lineIterator(new File(this.configFolder + "node.config"), "UTF-8");
         
@@ -201,18 +208,31 @@ public class BFTNode extends DefaultRecoverable {
         it.close();
         
         mspid = configs.get("MSPID");
-        privKey = getPemPrivateKey(configs.get("PRIVKEY"));
-        certificate = getCertificate(configs.get("CERTIFICATE"));
-        serializedCert = getSerializedCertificate(certificate);
-        ident = getSerializedIdentity(mspid, serializedCert);
+        privKey = BFTCommon.getPemPrivateKey(configs.get("PRIVKEY"));
+        certificate = BFTCommon.getCertificate(configs.get("CERTIFICATE"));
+        serializedCert = BFTCommon.getSerializedCertificate(certificate);
+        ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);
         parallelism = Integer.parseInt(configs.get("PARELLELISM"));
         blocksPerThread = Integer.parseInt(configs.get("BLOCKS_PER_THREAD"));
+        bothSigs = Boolean.parseBoolean(configs.get("BOTH_SIGS"));
+        envValidation = Boolean.parseBoolean(configs.get("ENV_VALIDATION"));
+        
+        FileInputStream input = new FileInputStream(new File(configs.get("GENESIS")));
+        sysGenesis = Common.Block.parseFrom(IOUtils.toByteArray(input));
+        
+        Common.Envelope env = Common.Envelope.parseFrom(sysGenesis.getData().getData(0));
+        Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
+        Common.ChannelHeader chanHeader = Common.ChannelHeader.parseFrom(payload.getHeader().getChannelHeader());
+        sysChannel = chanHeader.getChannelId();
+        
+        String window = configs.get("TIME_WINDOW");
+        timeWindow = BFTCommon.parseDuration(window).toMillis();
         
         String[] IDs = configs.get("RECEIVERS").split("\\,");
-        int[] receivers = Arrays.asList(IDs).stream().mapToInt(Integer::parseInt).toArray();
+        int[] recvs = Arrays.asList(IDs).stream().mapToInt(Integer::parseInt).toArray();
         
         this.receivers = new TreeSet<>();
-        for (int o : receivers) {
+        for (int o : recvs) {
             this.receivers.add(o);
         }
                 
@@ -227,6 +247,8 @@ public class BFTNode extends DefaultRecoverable {
         String configFolder = null;
         if (args.length > 1) configFolder = args[1];
         
+        Security.addProvider(new BouncyCastleProvider());
+        
         new BFTNode(Integer.parseInt(args[0]),configFolder);
     }
 
@@ -240,7 +262,6 @@ public class BFTNode extends DefaultRecoverable {
             
             sysChannel = in.readUTF();
             sequence = in.readInt();
-            lastConfig = in.readLong();
             
             receivers = new TreeSet<Integer>();
             int n = in.readInt();
@@ -260,7 +281,16 @@ public class BFTNode extends DefaultRecoverable {
                 
             }
             
-            blockCutter = null;
+            byte[] sysBytes = new byte[0];
+            n = in.readInt();
+            
+            if (n > 0) {
+                
+                sysBytes = new byte[n];
+                in.read(sysBytes);
+                
+            }
+            
             n = in.readInt();
             
             if (n > 0) {
@@ -268,8 +298,17 @@ public class BFTNode extends DefaultRecoverable {
                 byte[] b = new byte[n];
                 in.read(b);
                             
-                blockCutter = new BlockCutter();
-                blockCutter.deserialize(b);
+                blockCutter = BlockCutter.deserialize(b);
+            }
+            
+            n = in.readInt();
+            
+            if (n > 0) {
+            
+                byte[] b = new byte[n];
+                in.read(b);
+                            
+                mspManager = MSPManager.deserialize(mspid, sysChannel, b);
             }
             
             //deserialize headers
@@ -279,10 +318,17 @@ public class BFTNode extends DefaultRecoverable {
             this.lastBlockHeaders = (Map<String,Common.BlockHeader>) i.readObject();
             i.close();
             b.close();
+                        
+            //deserialize system genesis block
+            b = new ByteArrayInputStream(sysBytes);
+            i = new ObjectInputStream(b);
+            this.sysGenesis = (Common.Block) i.readObject();
             
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        } catch (ClassNotFoundException ex) {
+            i.close();
+            b.close();
+                        
+        } catch (Exception ex) {
+            
             ex.printStackTrace();
         }
     }
@@ -301,6 +347,15 @@ public class BFTNode extends DefaultRecoverable {
             b.close();
             o.close();
             
+            //serialize system genesis block
+            b = new ByteArrayOutputStream();
+            o = new ObjectOutputStream(b);   
+            o.writeObject(sysGenesis);
+            o.flush();
+            byte[] sysBytes = b.toByteArray();
+            b.close();
+            o.close();
+            
             //serialize receivers
             Integer[] orderers;
             
@@ -314,13 +369,15 @@ public class BFTNode extends DefaultRecoverable {
             //serialize block cutter
             byte[] blockcutter = (blockCutter != null ? blockCutter.serialize() : new byte[0]);
             
+            //serialize MSP manager
+            byte[] mspmanager = (mspManager != null ? mspManager.serialize() : new byte[0]);
+            
             //concatenate bytes
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bos);
             
             out.writeUTF(sysChannel);
             out.writeInt(sequence);
-            out.writeLong(lastConfig);
             
             out.writeInt(orderers.length);
             
@@ -341,8 +398,18 @@ public class BFTNode extends DefaultRecoverable {
             out.flush();
             bos.flush();
             
+            out.writeInt(sysBytes.length);
+            if (sysBytes.length > 0) out.write(sysBytes);
+            out.flush();
+            bos.flush();
+            
             out.writeInt(blockcutter.length);
             if (blockcutter.length > 0) out.write(blockcutter);
+            out.flush();
+            bos.flush();
+            
+            out.writeInt(mspmanager.length);
+            if (mspmanager.length > 0) out.write(mspmanager);
             out.flush();
             bos.flush();
             
@@ -366,189 +433,328 @@ public class BFTNode extends DefaultRecoverable {
         for (int i = 0; i < commands.length; i++) {
             if (msgCtxs != null && msgCtxs[i] != null) {
 
-                try {
-                    replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+                replies[i] = executeSingle(commands[i], msgCtxs[i], fromConsensus);
+                
             }
         }
 
         return replies;
     }
-
-    private boolean verifySignature(int id, RequestTuple tuple) {
-        try {
-            PublicKey key = replica.getReplicaContext().getStaticConfiguration().getRSAPublicKey(id);
-            
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            DataOutput out = new DataOutputStream(bos);
-            
-            out.writeUTF(tuple.type);
-            out.writeUTF(tuple.channelID);
-            out.writeInt(tuple.payload.length);
-            out.write(tuple.payload);
-            
-            bos.flush();
-            bos.close();
-            
-            return TOMUtil.verifySignature(key, bos.toByteArray(), tuple.signature);
-            
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return false;
+    
+    private void waitforReplica() throws InterruptedException {
+        
+        while (replica == null) {
+                            
+            replicaLock.lock();
+            replicaReady.await(1000, TimeUnit.MILLISECONDS);
+            replicaLock.lock();
         }
     }
     
-    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) throws IOException {
-
-        if (receivers.contains(msgCtx.getSender())) {
+    private byte[] executeSingle(byte[] command, MessageContext msgCtx, boolean fromConsensus) {
             
-            RequestTuple tuple = deserializeSignedRequest(command);
-            if (!verifySignature(msgCtx.getSender(),tuple)) return new byte[0];
-                       
-            if (tuple.type.equals("GETSVIEW")) {
+        //make sure system channel is created, since we cannot do it at start up due to not having a timestamp yet
+        //this is only done once
+        if (mspManager.getChanConfig(this.sysChannel) == null) {
+            
+            MSPManager mspManager = this.mspManager.clone();
+            BlockCutter blockCutter = this.blockCutter.clone();
+            Map<String,Common.BlockHeader> lastBlockHeaders = new TreeMap<>();
+            lastBlockHeaders.putAll(this.lastBlockHeaders);
                 
-                logger.info("A proxy is trying to fetch the most current view");
+            try {
+            
+                newChannel(mspManager, blockCutter, lastBlockHeaders, this.sysChannel, this.sysGenesis, msgCtx.getTimestamp());
+                
+            } catch (Exception e) {
+                
+                //TODO: handle error
+                e.printStackTrace();
                 return new byte[0];
             }
+            
+            this.mspManager = mspManager;
+            this.blockCutter = blockCutter;
+            this.lastBlockHeaders = lastBlockHeaders;
+        }
+        
+        BlockCutter blockCutter = this.blockCutter.clone();
+        
+        MSPManager mspManager = null;
+        Map<String,Common.BlockHeader> lastBlockHeaders = new TreeMap<>();
+        
+        try {
+            
+            if (receivers.contains(msgCtx.getSender())) {
+
+                BFTCommon.RequestTuple tuple = BFTCommon.deserializeSignedRequest(command);
+                if (!BFTCommon.verifyFrontendSignature(msgCtx.getSender(),
+                        replicaConf.getRSAPublicKey(id), tuple)) return new byte[0];
+
+                if (tuple.type.equals("GETSVIEW")) {
+
+                    logger.info("A proxy is trying to fetch the most current view");
+                    return new byte[0];
+                }
+
+                if (tuple.type.equals("SEQUENCE")) {
+
+                    byte[][] reply = new byte[2][];
+                    reply[0] = "SEQUENCE".getBytes();
+                    reply[1] = ByteBuffer.allocate(4).putInt(this.sequence).array();
+
+                    return BFTCommon.serializeContents(reply);
+                }
+
+                if (tuple.type.equals("TIMEOUT")) {
+
+
+                    logger.info("Purging blockcutter for channel " + tuple.channelID);
+
+                    byte[][] batch = blockCutter.cut(tuple.channelID);
+
+                    if (batch.length > 0) {
                         
-            if (tuple.type.equals("SEQUENCE")) {
+                        mspManager = this.mspManager.clone();
+                        lastBlockHeaders.putAll(this.lastBlockHeaders);
 
-                byte[][] reply = new byte[2][];
-                reply[0] = "SEQUENCE".getBytes();
-                reply[1] = ByteBuffer.allocate(4).putInt(this.sequence).array();
-                
-                return serializeContents(reply);
+                        processEnvelopes(batch, blockCutter, mspManager, lastBlockHeaders, msgCtx, fromConsensus, tuple.channelID, false);
+                        
+                        //if we are here, we can atomically update the replica state
+                        this.mspManager = mspManager;
+                        this.lastBlockHeaders = lastBlockHeaders;
+                    } 
+
+                    this.blockCutter = blockCutter;
+                    
+                    return new byte[0];
+
+                }
+
+                return new byte[0];
+            }
+        
+            if (envelopeMeasurementStartTime == -1) {
+                envelopeMeasurementStartTime = System.currentTimeMillis();
             }
 
-            if (tuple.type.equals("NEWCHANNEL")) {
-                                             
-                if (tuple.channelID != null && lastBlockHeaders.get(tuple.channelID) == null) {
-                    
-                    ByteBuffer buff = ByteBuffer.wrap(tuple.payload);
-                    
-                    long preferredMaxBytes = buff.getLong();
-                    long maxMessageCount = buff.getLong();
-                    
-                    this.blockCutter.setBatchParms(tuple.channelID, preferredMaxBytes, maxMessageCount);
-                    
-                    byte[] bytes = new byte[tuple.payload.length - (Long.BYTES*2)];
-                    buff.get(bytes);
+            countEnvelopes++;
 
-                    Common.BlockHeader header = Common.BlockHeader.parseFrom(bytes);
-                
-                    lastBlockHeaders.put(tuple.channelID, header);
+            if (countEnvelopes % interval == 0) {
 
-                    logger.info("New channel ID: " + tuple.channelID);
-                    logger.info("Genesis header number: " + lastBlockHeaders.get(tuple.channelID).getNumber());
-                    logger.info("Genesis header previous hash: " + Arrays.toString(lastBlockHeaders.get(tuple.channelID).getPreviousHash().toByteArray()));
-                    logger.info("Genesis header data hash: " + Arrays.toString(lastBlockHeaders.get(tuple.channelID).getDataHash().toByteArray()));
-                    logger.info("Genesis header ASN1 encoding: " + Arrays.toString(encodeBlockHeaderASN1(lastBlockHeaders.get(tuple.channelID))));
-                    
-                    if (msgCtx.getSequence() == 1) {
+                float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
+                logger.info("Throughput = " + tp + " envelopes/sec");
+                envelopeMeasurementStartTime = System.currentTimeMillis();
 
-                        logger.info("Setting system channel to " + tuple.channelID);
+            }
 
-                        sysChannel = tuple.channelID;
-                    }
+            logger.debug("Envelopes received: " + countEnvelopes);
+        
+            BFTCommon.RequestTuple tuple = BFTCommon.deserializeRequest(command);
+            boolean isConfig = tuple.type.equals("CONFIG");
+
+            logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
+
+            List<byte[][]> batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
+            
+            if (batches.size() > 0) {
+
+                mspManager = this.mspManager.clone();
+                lastBlockHeaders.putAll(this.lastBlockHeaders);
+
+                for (int i = 0; i < batches.size(); i++) {
+                    processEnvelopes(batches.get(i), blockCutter, mspManager, lastBlockHeaders, msgCtx, fromConsensus, tuple.channelID, isConfig);
                 }
-                
-                return new byte[0];
+
+                //if we are here, we can atomically update the replica state
+                this.mspManager = mspManager;            
+                this.lastBlockHeaders = lastBlockHeaders;
+            
             }
             
-            if (tuple.type.equals("TIMEOUT")) {
-                
-                
-                logger.info("Purging blockcutter for channel " + tuple.channelID);
+            this.blockCutter = blockCutter;
 
-                byte[][] batch = blockCutter.cut(tuple.channelID);
-
-                if (batch.length > 0) {
-
-                    assembleAndSend(batch, msgCtx, fromConsensus, tuple.channelID, false);
-                }
-                
-                return new byte[0];
-
-            }
-                            
+        } catch (Exception e) {
+            
+            //TODO: handle error
+            e.printStackTrace();
             return new byte[0];
-        }
-
-        if (envelopeMeasurementStartTime == -1) {
-            envelopeMeasurementStartTime = System.currentTimeMillis();
-        }
-
-        countEnvelopes++;
-
-        if (countEnvelopes % interval == 0) {
-
-            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
-            logger.info("Throughput = " + tp + " envelopes/sec");
-            envelopeMeasurementStartTime = System.currentTimeMillis();
-
-        }
-
-        logger.debug("Envelopes received: " + countEnvelopes);
-
-        List<byte[][]> batches = null;
-                    
-        RequestTuple tuple = deserializeRequest(command);
-        boolean isConfig = tuple.type.equals("CONFIG");
-
-        logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
-
-        batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
-
-        if (batches != null) {
-
-            for (int i = 0; i < batches.size(); i++) {
-                assembleAndSend(batches.get(i), msgCtx, fromConsensus, tuple.channelID, isConfig);
-            }
-
-        }
             
+        }
+        
         return "ACK".getBytes();
 
     }
+    
+    private void newChannel(MSPManager mspManager, BlockCutter blockCutter, Map<String,Common.BlockHeader> lastBlockHeaders, String channelID, Common.Block genesis, long timestamp) throws BFTCommon.BFTException {
+        
+        if (channelID != null && genesis != null && lastBlockHeaders.get(channelID) == null) {
+                    
+            logger.info("Creating channel " + channelID);
+            
+            long preferredMaxBytes = -1;
+            long maxMessageCount = -1;
+        
+            try{
+                
+                Configtx.ConfigEnvelope conf = BFTCommon.extractConfigEnvelope(genesis);
+                
+                Configuration.BatchSize batchSize = BFTCommon.extractBachSize(conf.getConfig());
+                
+                preferredMaxBytes = batchSize.getPreferredMaxBytes();
+                maxMessageCount = batchSize.getMaxMessageCount();
+            
+                mspManager.newChannel(channelID, genesis.getHeader().getNumber(), conf, timestamp);
+                
+                
+            } catch (BFTCommon.BFTException ex) {
+            
+                throw ex;
 
-    private void assembleAndSend(byte[][] batch, MessageContext msgCtx, boolean fromConsensus, String channel, boolean isConfig) {
+            } catch (Exception ex) {
+
+                throw new BFTCommon.BFTException("Failed to update channel " + channelID + ": " + ex.getLocalizedMessage());
+            }
+            
+            // if we are here, we will successfully atomically update the channel
+            if (preferredMaxBytes > -1 && maxMessageCount > -1) {
+                
+                lastBlockHeaders.put(channelID, genesis.getHeader());
+                blockCutter.setBatchParms(channelID, preferredMaxBytes , maxMessageCount);
+            }
+            
+            logger.info("New channel ID: " + channelID);
+            logger.info("Genesis header number: " + lastBlockHeaders.get(channelID).getNumber());
+            //logger.info("Genesis header previous hash: " + Hex.encodeHexString(lastBlockHeaders.get(channelID).getPreviousHash().toByteArray()));
+            logger.info("Genesis header data hash: " + Hex.encodeHexString(lastBlockHeaders.get(channelID).getDataHash().toByteArray()));
+            //logger.info("Genesis header ASN1 encoding: " + Arrays.toString(BFTCommon.encodeBlockHeaderASN1(lastBlockHeaders.get(channelID))));
+        }
+    }
+    
+    private void updateChannel(MSPManager mspManager, BlockCutter blockCutter, String channel, long number, Configtx.ConfigEnvelope newConfEnv, Configtx.Config newConfig, long timestamp) throws BFTCommon.BFTException {
+        
+        long preferredMaxBytes = -1;
+        long maxMessageCount = -1;
+            
         try {
+            
+            logger.info("Updating state for channel " + channel);
+            
+            Map<String,Configtx.ConfigGroup> groups = newConfig.getChannelGroup().getGroupsMap();
 
+            Configuration.BatchSize batchsize = Configuration.BatchSize.parseFrom(groups.get("Orderer").getValuesMap().get("BatchSize").getValue());
+
+            preferredMaxBytes = batchsize.getPreferredMaxBytes();
+            maxMessageCount = batchsize.getMaxMessageCount();
+        
+            mspManager.updateChannel(channel, number, newConfEnv, newConfig, timestamp);
+            
+            
+        } catch (BFTCommon.BFTException ex) {
+            
+            throw ex;
+            
+        } catch (Exception ex) {
+            
+            throw new BFTCommon.BFTException("Failed to update channel " + channel + ": " + ex.getLocalizedMessage());
+        }
+
+        // if we are here, we will successfully atomically update the channel
+        if (preferredMaxBytes > -1 && maxMessageCount > -1) {
+            blockCutter.setBatchParms(channel, preferredMaxBytes , maxMessageCount);
+        }
+
+        logger.info("Latest block with config update for "+ channel +": #" + number);
+
+    }
+
+    private void processEnvelopes(byte[][] batch, BlockCutter blockCutter, MSPManager mspManager, Map<String,Common.BlockHeader> lastBlockHeaders, MessageContext msgCtx, boolean fromConsensus, String channel, boolean isConfig) throws BFTCommon.BFTException {
+                
+        Common.Block block = null;
+                
+        try {
+            
+            block = BFTCommon.createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(BFTCommon.encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
+            
+        
             if (blockMeasurementStartTime == -1) {
                 blockMeasurementStartTime = System.currentTimeMillis();
             }
-            
-            Common.Block block = createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
-
+                        
             if (isConfig) {
                 
-                Common.Envelope env = Common.Envelope.parseFrom(batch[0]);
+                Common.Envelope env = Common.Envelope.parseFrom(block.getData().getData(0));
                 Common.Payload payload = Common.Payload.parseFrom(env.getPayload());
-                Common.ChannelHeader chanHeader = Common.ChannelHeader.parseFrom(payload.getHeader().getChannelHeader());
-
-                logger.info("Creating configuration block for " + channel + "with code: " + chanHeader.getType());
-
-                if (chanHeader.getType() == Common.HeaderType.CONFIG_VALUE) {
-                    lastConfig = block.getHeader().getNumber();
-                    
-                    logger.info("Latest block with config update for "+ channel +" = #" + lastConfig);
-                    
-                    Configtx.ConfigEnvelope confEnv = Configtx.ConfigEnvelope.parseFrom(payload.getData());
+                Configtx.ConfigUpdateEnvelope confEnv = Configtx.ConfigUpdateEnvelope.parseFrom(payload.getData());
                 
-                    Map<String,Configtx.ConfigGroup> groups = confEnv.getConfig().getChannelGroup().getGroupsMap();
+                Configtx.ConfigUpdate confUpdate = Configtx.ConfigUpdate.parseFrom(confEnv.getConfigUpdate());
+                boolean isConfigUpdate = confUpdate.getChannelId().equals(channel);
+                
+                if (isConfigUpdate) {
                     
-                    Configuration.BatchSize batchsize = Configuration.BatchSize.parseFrom(groups.get("Orderer").getValuesMap().get("BatchSize").getValue());
+                    mspManager.verifyPolicies(channel, false, confUpdate.getReadSet(), confUpdate.getWriteSet(), confEnv, msgCtx.getTimestamp());
                     
-                    long preferredMaxBytes = batchsize.getPreferredMaxBytes();
-                    long maxMessageCount = batchsize.getMaxMessageCount();
+                    if (envValidation) mspManager.validateEnvelope(env, channel, msgCtx.getTimestamp(), timeWindow);
+                        
+                    logger.info("Reconfiguration envelope for channel "+ channel +" is valid, generating configuration with readset and writeset");
 
-                    blockCutter.setBatchParms(channel, preferredMaxBytes, maxMessageCount);
+                    Configtx.Config newConfig = mspManager.generateNextConfig(channel, confUpdate.getReadSet(), confUpdate.getWriteSet());
+                    Configtx.ConfigEnvelope newConfEnv = BFTCommon.makeConfigEnvelope(newConfig, env);
+                                        
+                    //The fabric codebase inserts the lastupdate structure into a signed envelope. I cannot do this here because the signatures
+                    //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
+                    //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
+                    //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
+                    Common.Envelope newEnvelope = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), Common.HeaderType.CONFIG, 0, channel, 0, 
+                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    
+                    block = BFTCommon.createNextBlock(block.getHeader().getNumber(), block.getHeader().getPreviousHash().toByteArray(), new byte[][] { newEnvelope.toByteArray() });
+                    
+                    updateChannel(mspManager, blockCutter, channel, block.getHeader().getNumber(), newConfEnv, newConfig, msgCtx.getTimestamp());
+                    
+                }
+                
+                else if (!isConfigUpdate && channel.equals(sysChannel)) {
+                    
+                    mspManager.verifyPolicies(channel, true, confUpdate.getReadSet(), confUpdate.getWriteSet(), confEnv, msgCtx.getTimestamp());
+                    
+                    // We do not perform envelope validation for the envelope that is going to be appended to the system channel, since it is created by
+                    // its own organization/msp. The fabric codebase does re-apply the filters and hence authenticates the envelope to perform a sanity
+                    // check, but the the prime reason for re-applying the filters is to check that the size of the envelope is still within the size
+                    // limit. Furthermore, since this ordering service cannot sign the envelope, it should not validate it either (see comments below
+                    // regarding why the envelope is not signed)
+                    //if (envValidation) mspManager.validateEnvelope(env, channel, msgCtx.getTimestamp(), timeWindow);
+                    
+                    logger.info("Orderer transaction envelope for system channel is valid, generating genesis with readset and writeset for channel "+ confUpdate.getChannelId());
+                    
+                    Configtx.Config newConfig = mspManager.newChannelConfig(channel,confUpdate.getReadSet(),confUpdate.getWriteSet());
+                    Configtx.ConfigEnvelope newConfEnv = BFTCommon.makeConfigEnvelope(newConfig, env);
+                    
+                    //The fabric codebase inserts the lastupdate structure into a signed envelope. We cannot do this here because the signatures
+                    //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
+                    //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
+                    //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
+                    Common.Envelope envelopeClone = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), Common.HeaderType.CONFIG, 0, confUpdate.getChannelId(), 0, 
+                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    
+                    Common.Block genesis = BFTCommon.createNextBlock(0, null, new byte[][]{envelopeClone.toByteArray()});
+                    
+                    envelopeClone = BFTCommon.makeUnsignedEnvelope(envelopeClone.toByteString(), Common.HeaderType.ORDERER_TRANSACTION, 0, channel, 0, 
+                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    
+                    block = BFTCommon.createNextBlock(block.getHeader().getNumber(), block.getHeader().getPreviousHash().toByteArray(), new byte[][] { envelopeClone.toByteArray() });
 
+                    newChannel(mspManager, blockCutter, lastBlockHeaders, confUpdate.getChannelId(), genesis, msgCtx.getTimestamp());
+                    
+                } else {
+                    
+                    String msg = "Envelope contained channel creation request, but was submitted to a non-system channel (" + channel + ")";
+                    logger.info(msg);
+                    throw new BFTCommon.BFTException(msg);
                 }
             }
-                
+            
+            //Throughput measurements
             countBlocks++;
 
             if (countBlocks % interval == 0) {
@@ -558,387 +764,59 @@ public class BFTNode extends DefaultRecoverable {
                 blockMeasurementStartTime = System.currentTimeMillis();
 
             }
-
-            lastBlockHeaders.put(channel, block.getHeader());
-            
-            if ((lastBlockHeaders.get(channel).getNumber() % 100) == 0)
-                 System.out.println("[" + channel + "] Genesis header hash for header #" + lastBlockHeaders.get(channel).getNumber() + ": " + Arrays.toString(lastBlockHeaders.get(channel).getDataHash().toByteArray()));
             
             //optimization to parellise signatures and sending
             if (fromConsensus) { //if this is from the state transfer, there is no point in signing and sending yet again
-                
+
                 if (sigIndex % blocksPerThread == 0) {
 
                     if (currentSST != null) {
-                        currentSST.input(null, null, -1, null, false, -1);
+                        currentSST.input(null, null, -1, null, false, null);
                     }
 
                     currentSST = this.queue.take(); // fetch the first SSThread that is idle
 
                 }
 
-                currentSST.input(block, msgCtx, this.sequence, channel, isConfig, lastConfig);
+                currentSST.input(block, msgCtx, this.sequence, channel, isConfig, mspManager);
                 sigIndex++;
             }
             
-            //Runnable SSThread = new SignerSenderThread(block, msgCtx, this.sequence);
-            //this.executor.execute(SSThread);
-            this.sequence++; // because of parelisation, I need to increment the sequence number in this method
+            lastBlockHeaders.put(channel, block.getHeader());
+            
+        } catch (Exception ex) {
+            
+            //TODO: Handle error
+            
+            if (ex instanceof BFTCommon.BFTException) throw (BFTCommon.BFTException) ex;
+            BFTCommon.BFTException e = new BFTCommon.BFTException("Error while processing envelopes.");
+            e.addSuppressed(ex);
+            throw e;
+            
+        } //finally {
+
+        //TODO: this will need a finally statement once error replies are implemented
+        this.sequence++; // increment the sequence number that frontends expect
+                 
+        //}
                        
-            //standard code for sequential signing and sending (with debbuging prints)
-            /*CommonProtos.Metadata blockSig = createMetadataSignature(("BFT-SMaRt::"+id).getBytes(), msgCtx.getNonces(), null, lastBlockHeader);
-            byte[] dummyConf= {0,0,0,0,0,0,0,1}; //TODO: find a way to implement the check that is done in the golang code
-            CommonProtos.Metadata configSig = createMetadataSignature(("BFT-SMaRt::"+id).getBytes(), msgCtx.getNonces(), dummyConf, lastBlockHeader);
-
-            sendToOrderers(block, blockSig, configSig, msgCtx);*/
-        } catch (NoSuchAlgorithmException | NoSuchProviderException | IOException | InterruptedException ex) {
-            Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
-        }
     }
-
-    /*private void sendToOrderers(Common.Block block, Common.Metadata blockSig, Common.Metadata configSig, MessageContext msgCtx) throws IOException {
-
-        byte[][] contents = new byte[3][];
-        contents[0] = block.toByteArray();
-        contents[1] = blockSig.toByteArray();
-        contents[2] = configSig.toByteArray();
-
-        TOMMessage reply = null;
-        reply = new TOMMessage(id,
-                msgCtx.getSession(),
-                sequence, //change sequence because the message is going to be received by all clients, not just the original sender
-                msgCtx.getOperationId(),
-                serializeContents(contents),
-                replica.getReplicaContext().getCurrentView().getId(),
-                msgCtx.getType());
-
-        if (reply == null) {
-            return;
-        }
-
-        int[] clients = replica.getReplicaContext().getServerCommunicationSystem().getClientsConn().getClients();
-
-        replica.getReplicaContext().getServerCommunicationSystem().send(clients, reply);
-
-        sequence++;
-    }*/
-
-    private byte[] serializeContents(byte[][] contents) throws IOException {
-
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(bos);
-
-        out.writeInt(contents.length);
-
-        out.flush();
-        bos.flush();
-        for (int i = 0; i < contents.length; i++) {
-
-            out.writeInt(contents[i].length);
-
-            out.write(contents[i]);
-
-            out.flush();
-            bos.flush();
-        }
-
-        out.close();
-        bos.close();
-        return bos.toByteArray();
-
-    }
-
-    private byte[] encodeBlockHeaderASN1(Common.BlockHeader header) throws IOException {
-
-        //convert long to byte array
-        //ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        //ObjectOutput out = new ObjectOutputStream(bos);
-        //out.writeLong(header.getNumber());
-        //out.flush();
-        //bos.flush();
-        //out.close();
-        //bos.close();
-        //byte[] number = bos.toByteArray();
-        // encode the header in ASN1 format
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ASN1OutputStream asnos = new ASN1OutputStream(bos);
-
-        asnos.writeObject(new ASN1Integer((int) header.getNumber()));
-        //asnos.writeObject(new DERInteger((int) header.getNumber()));
-        asnos.writeObject(new DEROctetString(header.getPreviousHash().toByteArray()));
-        asnos.writeObject(new DEROctetString(header.getDataHash().toByteArray()));
-        asnos.flush();
-        bos.flush();
-        asnos.close();
-        bos.close();
-
-        byte[] buffer = bos.toByteArray();
-
-        //Add golang idiosyncrasies
-        byte[] bytes = new byte[buffer.length + 2];
-        bytes[0] = 48; // no idea what this means, but golang's encoding uses it
-        bytes[1] = (byte) buffer.length; // length of the rest of the octet string, also used by golang
-        for (int i = 0; i < buffer.length; i++) { // concatenate
-            bytes[i + 2] = buffer[i];
-        }
-
-        return bytes;
-    }
-
-    private Common.Block createNextBlock(long number, byte[] previousHash, byte[][] envs) throws NoSuchAlgorithmException, NoSuchProviderException {
-
-        //initialize
-        Common.BlockHeader.Builder blockHeaderBuilder = Common.BlockHeader.newBuilder();
-        Common.BlockData.Builder blockDataBuilder = Common.BlockData.newBuilder();
-        Common.BlockMetadata.Builder blockMetadataBuilder = Common.BlockMetadata.newBuilder();
-        Common.Block.Builder blockBuilder = Common.Block.newBuilder();
-
-        //create header
-        blockHeaderBuilder.setNumber(number);
-        blockHeaderBuilder.setPreviousHash(ByteString.copyFrom(previousHash));
-        blockHeaderBuilder.setDataHash(ByteString.copyFrom(crypto.hash(concatenate(envs))));
-
-        //create metadata
-        int numIndexes = Common.BlockMetadataIndex.values().length;
-        for (int i = 0; i < numIndexes; i++) {
-            blockMetadataBuilder.addMetadata(ByteString.EMPTY);
-        }
-
-        //create data
-        for (int i = 0; i < envs.length; i++) {
-            blockDataBuilder.addData(ByteString.copyFrom(envs[i]));
-        }
-
-        //crete block
-        blockBuilder.setHeader(blockHeaderBuilder.build());
-        blockBuilder.setMetadata(blockMetadataBuilder.build());
-        blockBuilder.setData(blockDataBuilder.build());
-
-        return blockBuilder.build();
-    }
-
-    private Common.Metadata createMetadataSignature(byte[] creator, byte[] nonce, byte[] plaintext, Common.BlockHeader blockHeader) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException, IOException, CryptoException {
-
-        Common.Metadata.Builder metadataBuilder = Common.Metadata.newBuilder();
-        Common.MetadataSignature.Builder metadataSignatureBuilder = Common.MetadataSignature.newBuilder();
-        Common.SignatureHeader.Builder signatureHeaderBuilder = Common.SignatureHeader.newBuilder();
-
-        signatureHeaderBuilder.setCreator(ByteString.copyFrom(creator));
-        signatureHeaderBuilder.setNonce(ByteString.copyFrom(nonce));
-
-        Common.SignatureHeader sigHeader = signatureHeaderBuilder.build();
-
-        metadataSignatureBuilder.setSignatureHeader(sigHeader.toByteString());
-
-        byte[][] concat = {plaintext, sigHeader.toByteString().toByteArray(), encodeBlockHeaderASN1(blockHeader)};
-
-        //byte[] sig = sign(concatenate(concat));
-        byte[] sig = crypto.sign(privKey, concatenate(concat));
-
-        logger.debug("Signature for block #" + blockHeader.getNumber() + ": " + Arrays.toString(sig) + "\n");
-
-        //parseSig(sig);
-        metadataSignatureBuilder.setSignature(ByteString.copyFrom(sig));
-
-        metadataBuilder.setValue((plaintext != null ? ByteString.copyFrom(plaintext) : ByteString.EMPTY));
-        metadataBuilder.addSignatures(metadataSignatureBuilder);
-
-        return metadataBuilder.build();
-    }
-
-    private byte[] concatenate(byte[][] bytes) {
-
-        int totalLength = 0;
-        for (byte[] b : bytes) {
-            if (b != null) {
-                totalLength += b.length;
-            }
-        }
-
-        byte[] concat = new byte[totalLength];
-        int last = 0;
-
-        for (int i = 0; i < bytes.length; i++) {
-            if (bytes[i] != null) {
-                for (int j = 0; j < bytes[i].length; j++) {
-                    concat[last + j] = bytes[i][j];
-                }
-
-                last += bytes[i].length;
-            }
-
-        }
-
-        return concat;
-    }
-
-    /*private void parseSig(byte[] sig) throws IOException {
-        
-        ASN1InputStream input = new ASN1InputStream(sig);
-
-        ASN1Primitive p;
-        while ((p = input.readObject()) != null) {
-            ASN1Sequence asn1 = ASN1Sequence.getInstance(p);
-
-            ASN1Integer r = ASN1Integer.getInstance(asn1.getObjectAt(0));
-            ASN1Integer s = ASN1Integer.getInstance(asn1.getObjectAt(1));
-            
-
-            logger.info("r (int): " + r.getValue().toString());
-            logger.info("s (int): " + s.getValue().toString());
-            
-            logger.info("r (bytes): " + Arrays.toString(r.getValue().toByteArray()));
-            logger.info("s (bytes): " + Arrays.toString(s.getValue().toByteArray()));
-        }
-        
-    }
-    
-    public static byte[] sha256(byte[] bytes) throws NoSuchAlgorithmException, NoSuchProviderException {
-        
-        MessageDigest digestEngine = MessageDigest.getInstance("SHA-256","SUN");
-                
-        return digestEngine.digest(bytes);
-    }
-    
-    private byte[] sign(byte[] text) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, NoSuchProviderException, CryptoException {
-        
-        Signature signEngine = Signature.getInstance("SHA256withECDSA", BouncyCastleProvider.PROVIDER_NAME);
-        signEngine.initSign(privKey);
-        signEngine.update(text);
-        return signEngine.sign();
-        
-    }
-    
-    private boolean verify(byte[] text, byte[] signature) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, NoSuchProviderException, PEMException {
-        
-        PublicKey k = new JcaPEMKeyConverter().getPublicKey(certificate.getSubjectPublicKeyInfo());
-        Signature signEngine = Signature.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
-        signEngine.initVerify(k);
-        signEngine.update(text);
-        return signEngine.verify(signature);
-    }*/
-    private PrivateKey getPemPrivateKey(String filename) throws IOException {
-
-        BufferedReader br = new BufferedReader(new FileReader(filename));
-
-        PEMParser pp = new PEMParser(br);
-        Object obj = pp.readObject();
-        
-        pp.close();
-        br.close();
-        
-        if (obj instanceof PrivateKeyInfo) {
-        
-            PrivateKeyInfo keyInfo = (PrivateKeyInfo) obj;
-            return (new JcaPEMKeyConverter().getPrivateKey(keyInfo));
-        
-        } else {
-            
-            PEMKeyPair pemKeyPair = (PEMKeyPair) obj;
-
-            KeyPair kp = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
-            return kp.getPrivate();
-
-        }
-
-    }
-    
-    private X509CertificateHolder getCertificate(String filename) throws IOException {
-
-        BufferedReader br = new BufferedReader(new FileReader(filename));
-        PEMParser pp = new PEMParser(br);
-        X509CertificateHolder ret = (X509CertificateHolder) pp.readObject();
-        
-        br.close();
-        pp.close();
-        
-        return ret;
-    }
-    
-    private byte[] getSerializedCertificate(X509CertificateHolder certificate) throws IOException {
-        
-        PemObject pemObj = (new PemObject("", certificate.getEncoded()));
-
-        StringWriter strWriter = new StringWriter();
-        PemWriter writer = new PemWriter(strWriter);
-        writer.writeObject(pemObj);
-
-        writer.close();
-        strWriter.close();
-
-        return strWriter.toString().getBytes();
-        
-    }
-
-    private Identities.SerializedIdentity getSerializedIdentity(String Mspid, byte[] serializedCert) {
-
-        Identities.SerializedIdentity.Builder ident = Identities.SerializedIdentity.newBuilder();
-        ident.setMspid(Mspid);
-        ident.setIdBytes(ByteString.copyFrom(serializedCert));
-        return ident.build();
-    }
-
-    private RequestTuple deserializeRequest(byte[] request) throws IOException {
-        
-        ByteArrayInputStream bis = new ByteArrayInputStream(request);
-        DataInput in = new DataInputStream(bis);
-        
-        String type = in.readUTF();
-        String channelID = in.readUTF();
-        int l = in.readInt();
-        byte[] payload = new byte[l];
-        in.readFully(payload);
-      
-        bis.close();
-        
-        return new RequestTuple(type, channelID, payload, null);
-        
-    }
-            
-    private RequestTuple deserializeSignedRequest(byte[] request) throws IOException {
-        
-        ByteArrayInputStream bis = new ByteArrayInputStream(request);
-        DataInput in = new DataInputStream(bis);
-        
-        int l = in.readInt();
-        byte[] msg = new byte[l];
-        in.readFully(msg);
-        l = in.readInt();
-        byte[] sig = new byte[l];
-        in.readFully(sig);
-        
-        bis.close();
-        
-        bis = new ByteArrayInputStream(msg);
-        in = new DataInputStream(bis);
-        
-        String type = in.readUTF();
-        String channelID = in.readUTF();
-        l = in.readInt();
-        byte[] payload = new byte[l];
-        in.readFully(payload);
-      
-        bis.close();
-        
-        return new RequestTuple(type, channelID, payload, sig);
-        
-    }
-    
+       
     @Override
     public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
         return new byte[0];
     }
 
-    private class SignerSenderThread implements Runnable {
+    private class BlockWorkerThread implements Runnable {
 
-        private LinkedBlockingQueue<BFTTuple> input;
+        private LinkedBlockingQueue<BFTCommon.BFTTuple> input;
 
-        LinkedBlockingQueue<SignerSenderThread> queue;
+        LinkedBlockingQueue<BlockWorkerThread> queue;
 
         private final Lock inputLock;
         private final Condition notEmptyInput;
 
-        SignerSenderThread(LinkedBlockingQueue<SignerSenderThread> queue) throws NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
+        BlockWorkerThread(LinkedBlockingQueue<BlockWorkerThread> queue) throws NoSuchAlgorithmException, NoSuchProviderException, InterruptedException {
 
             this.queue = queue;
 
@@ -950,11 +828,11 @@ public class BFTNode extends DefaultRecoverable {
             this.queue.put(this);
         }
 
-        public void input(Common.Block block, MessageContext msgContext, int seq, String channel, boolean config, long lastConfig) throws InterruptedException {
+        public void input(Common.Block block, MessageContext msgContext, int seq, String channel, boolean config, MSPManager clonedManager) throws InterruptedException {
 
             this.inputLock.lock();
 
-            this.input.put(new BFTTuple(block, msgContext, seq, channel, config, lastConfig));
+            this.input.put(BFTCommon.getBFTTuple(block, msgContext, seq, channel, config, clonedManager));
 
             this.notEmptyInput.signalAll();
             this.inputLock.unlock();
@@ -968,7 +846,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 try {
 
-                    LinkedList<BFTTuple> list = new LinkedList<>();
+                    LinkedList<BFTCommon.BFTTuple> list = new LinkedList<>();
 
                     this.inputLock.lock();
 
@@ -979,7 +857,7 @@ public class BFTNode extends DefaultRecoverable {
                     this.input.drainTo(list);
                     this.inputLock.unlock();
 
-                    for (BFTTuple tuple : list) {
+                    for (BFTCommon.BFTTuple tuple : list) {
 
                         if (tuple.sequence == -1) {
                             this.queue.put(this);
@@ -990,14 +868,50 @@ public class BFTNode extends DefaultRecoverable {
                             sigsMeasurementStartTime = System.currentTimeMillis();
                         }
 
-                        //create signatures
-                        Common.Metadata blockSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), null, tuple.block.getHeader());
+                        //validate envelopes in block and discard invalid ones (if validation is enabled)
+                        if (envValidation && !tuple.config) { // if it is a configuration envelope, evaluation was already performed at the SMR thread
+                            
+                            Common.BlockData.Builder filtered = Common.BlockData.newBuilder();
+                            List<ByteString> envs = tuple.block.getData().getDataList();
+                            
+                            for (ByteString env : envs) {
+                                
+                                try {
+                                    
+                                    tuple.clonedManager.validateEnvelope(Common.Envelope.parseFrom(env), tuple.channelID, tuple.msgContext.getTimestamp(), timeWindow);
 
-                        Common.LastConfig.Builder last = Common.LastConfig.newBuilder();
-                        last.setIndex(tuple.lastConf);
+                                    filtered.addData(env);
+                                
+                                } catch (BFTCommon.BFTException ex) {
+                                    
+                                    logger.info("Envelope validation failed for envelope, discarding.");
+                                }
+        
+                            }
+                            
+                            tuple.block = tuple.block.toBuilder().setData(filtered).build();
+                        }
                         
-                        Common.Metadata configSig = createMetadataSignature(ident.toByteArray(), tuple.msgContext.getNonces(), last.build().toByteArray(), tuple.block.getHeader());
+                        logger.debug("Disseminating block containing " + tuple.block.getData().getDataCount() + " envelopes");
 
+                        //create signatures
+                        Common.Metadata blockSig = BFTCommon.createMetadataSignature(privKey, ident.toByteArray(), tuple.msgContext.getNonces(), null, tuple.block.getHeader());
+                        Common.Metadata configSig = null;
+        
+                        if (bothSigs) {
+                            
+                            Common.LastConfig.Builder last = Common.LastConfig.newBuilder();
+                            last.setIndex(tuple.clonedManager.getLastConfig(tuple.channelID));
+                        
+                            configSig = BFTCommon.createMetadataSignature(privKey, ident.toByteArray(), tuple.msgContext.getNonces(), last.build().toByteArray(), tuple.block.getHeader());
+                        } else {
+                            
+                            Common.MetadataSignature.Builder dummySig = 
+                                    Common.MetadataSignature.newBuilder().setSignature(ByteString.EMPTY).setSignatureHeader(ByteString.EMPTY);
+                            
+                            configSig = Common.Metadata.newBuilder().setValue(ByteString.EMPTY).addSignatures(dummySig).build();
+                            
+                        }
                         countSigs++;
 
                         if (countSigs % interval == 0) {
@@ -1016,7 +930,7 @@ public class BFTNode extends DefaultRecoverable {
                         contents[3] = tuple.channelID.getBytes();
                         contents[4] = new byte[] { (tuple.config ? (byte) 1 :(byte) 0) };
 
-                        byte[] serialized = serializeContents(contents);
+                        byte[] serialized = BFTCommon.serializeContents(contents);
 
                         // send contents to the orderers
                         TOMMessage reply = new TOMMessage(id,
@@ -1027,12 +941,7 @@ public class BFTNode extends DefaultRecoverable {
                                 tuple.msgContext.getViewID(),
                                 tuple.msgContext.getType());
 
-                        while (replica == null) {
-                            
-                            replicaLock.lock();
-                            replicaReady.await(1000, TimeUnit.MILLISECONDS);
-                            replicaLock.lock();
-                        }
+                        waitforReplica(); //avoid a null pointer exception caused by the replica attribute
                         
                         int[] clients = replica.getServerCommunicationSystem().getClientsConn().getClients();
 
@@ -1055,62 +964,11 @@ public class BFTNode extends DefaultRecoverable {
 
                     }
 
-                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException ex) {
-                    Logger.getLogger(BFTNode.class.getName()).log(Level.SEVERE, null, ex);
+                } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException | BFTCommon.BFTException ex) {
+                    ex.printStackTrace();
                 }
             }
 
         }
-    }
-
-    private class BFTTuple {
-
-        Common.Block block = null;
-        MessageContext msgContext = null;
-        int sequence = -1;
-        String channelID = null;
-        boolean config = false;
-        long lastConf = -1;
-
-        BFTTuple(Common.Block block, MessageContext msgCtx, int sequence, String channelID, boolean config, long lastConf) {
-
-            this.block = block;
-            this.msgContext = msgCtx;
-            this.sequence = sequence;
-            this.channelID = channelID;
-            this.config = config;
-            this.lastConf = lastConf;
-        }
-    }
-    
-    private class RequestTuple {
-
-        String type = null;
-        String channelID = null;
-        byte[] payload = null;
-        byte[] signature = null;
-
-        RequestTuple(String type, String channelID, byte[] payload, byte[] signature) {
-
-            this.type = type;
-            this.channelID = channelID;
-            this.payload = payload;
-            this.signature = signature;
-        }
-    }
-
-    private class NoopReplier extends DefaultReplier {
-
-        @Override
-        public void manageReply(TOMMessage tomm, MessageContext mc) {
-            
-            // send reply only if it is one of the clients from the connection pool or if it is the first message of the proxy
-            if (!receivers.contains(tomm.getSender()) || (receivers.contains(tomm.getSender()) && tomm.getSequence() == 0)) {
-                
-                super.manageReply(tomm, mc);
-            
-            }
-        }
-
     }
 }

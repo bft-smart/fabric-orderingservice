@@ -11,8 +11,6 @@ import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
 import bftsmart.tom.util.TOMUtil;
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleEntry;
@@ -24,8 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hyperledger.fabric.protos.common.Common;
@@ -36,9 +32,9 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class ProxyReplyListener extends AsynchServiceProxy {
 
-    private Map<Integer, ReplyTuple[]> replies;
+    private Map<Integer, BFTCommon.ReplyTuple[]> replies;
     private Map<Integer, Entry<String, Common.Block>> responses;
-    private Comparator<ReplyTuple> comparator;
+    private Comparator<BFTCommon.ReplyTuple> comparator;
     private int replyQuorum;
     private int next;
     
@@ -53,7 +49,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     
     //used to extract latest sequence number
     private int[] sequences;
-        
+            
     public ProxyReplyListener(int id) {
         super(id);
         init();
@@ -77,7 +73,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         replies = new HashMap<>();
         replyQuorum = getReplyQuorum();
         
-        comparator = (ReplyTuple o1, ReplyTuple o2) -> o1.block.equals(o2.block) && // compare entire block
+        comparator = (BFTCommon.ReplyTuple o1, BFTCommon.ReplyTuple o2) -> o1.block.equals(o2.block) && // compare entire block
                 o1.metadata[0].getValue().equals(o2.metadata[0].getValue()) &&      // compare block signature value
                 o1.metadata[1].getValue().equals(o2.metadata[1].getValue()) &&      // compare config signature value
                 o1.channel.equals(o2.channel) &&                                    // compare channel id
@@ -108,7 +104,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     private int newSequence(byte[] bytes) {
         
         try {
-            byte[][] contents = deserializeContents(bytes);
+            byte[][] contents = BFTCommon.deserializeContents(bytes);
             
             return ((new String(contents[0])).equals("SEQUENCE") ? ByteBuffer.wrap(contents[1]).getInt() : -1);
             
@@ -234,7 +230,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         }
 
         if (replies.get(tomm.getSequence()) == null) //avoid nullpointer exception
-            replies.put(tomm.getSequence(), new ReplyTuple[getViewManager().getCurrentViewN()]);
+            replies.put(tomm.getSequence(), new BFTCommon.ReplyTuple[getViewManager().getCurrentViewN()]);
 
         byte[][] contents = null;
         Common.Block block = null;
@@ -243,7 +239,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         boolean config = false;
 
         try {
-            contents = deserializeContents(tomm.getContent());
+            contents = BFTCommon.deserializeContents(tomm.getContent());
             if (contents == null || contents.length < 5) return;
             block = Common.Block.parseFrom(contents[0]);
             if (block == null) return;
@@ -259,9 +255,9 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             return;
         }
 
-        ReplyTuple[] reps = replies.get(tomm.getSequence());
+        BFTCommon.ReplyTuple[] reps = replies.get(tomm.getSequence());
 
-        reps[pos] = new ReplyTuple(block,metadata,channel,config);
+        reps[pos] = BFTCommon.getReplyTuple(block,metadata,channel,config);
 
         int sameContent = 1;
 
@@ -303,7 +299,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             public void run() {
 
                 try {
-                    invokeAsynchRequest(BFTProxy.assembleSignedRequest("GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
+                    invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getRSAPrivateKey(), "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
                             null, TOMMessageType.ORDERED_REQUEST);
                 } catch (IOException ex) {
                     ex.printStackTrace();
@@ -334,7 +330,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         return ret;
     }
                            
-    private Common.Block getBlock(ReplyTuple[] replies, int lastReceived) {
+    private Common.Block getBlock(BFTCommon.ReplyTuple[] replies, int lastReceived) {
         
             Common.Block.Builder block = replies[lastReceived].block.toBuilder();
             Common.BlockMetadata.Builder blockMetadata = block.getMetadata().toBuilder();
@@ -383,43 +379,5 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             
             return block.build();
             
-    }
-    
-    static private byte[][] deserializeContents(byte[] bytes) throws IOException {
-        
-        byte[][] batch = null;
-        
-        ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
-        DataInputStream in = new DataInputStream(bis);
-        int nContents =  in.readInt();
-        batch = new byte[nContents][];
-        
-        for (int i = 0; i < nContents; i++) {
-            
-            int length = in.readInt();
-
-            batch[i] = new byte[length];
-            in.read(batch[i]);
-        }
-        in.close();
-        bis.close();
- 
-        
-        return batch;
-    }
-    
-    private class ReplyTuple {
-        
-        Common.Block block;
-        Common.Metadata[] metadata;
-        String channel;
-        boolean config;
-        
-        ReplyTuple (Common.Block block, Common.Metadata[] metadata, String channel, boolean config) {
-            this.block = block;
-            this.metadata = metadata;
-            this.channel = channel;
-            this.config = config;
-        }
     }
 }

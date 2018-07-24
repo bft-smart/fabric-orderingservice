@@ -18,8 +18,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hyperledger.fabric.protos.common.Common;
@@ -37,17 +35,51 @@ public class BlockCutter {
     private Map<String, Long> MaxMessageCount;
     private Map<String, Integer> pendingBatchSizeBytes;
     
-    private Log logger;
+    private static Log logger = LogFactory.getLog(BlockCutter.class);;
 
-    public BlockCutter() { //used for state transfer
-        
-        logger = LogFactory.getLog(BlockCutter.class);
-        
+    private BlockCutter() { //used for state transfer
+                
         pendingBatches = new TreeMap<>();
         pendingBatchSizeBytes = new TreeMap<>();       
         PreferredMaxBytes = new TreeMap<>();
         MaxMessageCount = new TreeMap<>();
         
+    }
+    
+    @Override
+    public BlockCutter clone() {
+        
+        BlockCutter clone = new BlockCutter();
+        
+        Map<String, List<byte[]>> clonePendingBatches = new TreeMap<>();
+        pendingBatches.forEach((channel, envelopes) ->{
+        
+            List<byte[]> clonedEnvs = new LinkedList<>();
+            clonedEnvs.addAll(envelopes);
+            
+            clonePendingBatches.put(channel, clonedEnvs);
+        });
+        
+        Map<String, Long> clonedPreferredMaxBytes = new TreeMap<>();
+        clonedPreferredMaxBytes.putAll(PreferredMaxBytes);
+        
+        Map<String, Long> clonedMaxMessageCount = new TreeMap<>();
+        clonedMaxMessageCount.putAll(MaxMessageCount);
+
+        Map<String, Integer> clonedPendingBatchSizeBytes = new TreeMap<>();
+        clonedPendingBatchSizeBytes.putAll(pendingBatchSizeBytes);
+        
+        clone.pendingBatches = clonePendingBatches;
+        clone.PreferredMaxBytes = clonedPreferredMaxBytes;
+        clone.MaxMessageCount = clonedMaxMessageCount;
+        clone.pendingBatchSizeBytes = clonedPendingBatchSizeBytes;
+        
+        return clone;
+    }
+    
+    public static BlockCutter getInstance() {
+        
+        return new BlockCutter();
     }
     
     /*public BlockCutter(byte [] bytes) {
@@ -98,7 +130,7 @@ public class BlockCutter {
         
         boolean messageWillOverflowBatchSizeBytes = pendingBatchSizeBytes.get(channel) + messageSizeBytes > PreferredMaxBytes.get(channel);
         
-        if (messageWillOverflowBatchSizeBytes) {
+        if (messageWillOverflowBatchSizeBytes && pendingBatches.get(channel).size() > 0) {
             
             logger.debug("The current message, with " + messageSizeBytes + " bytes, will overflow the pending batch of " + pendingBatchSizeBytes + " bytes.");
             logger.debug("Pending batch would overflow if current message is added, cutting batch now.");
@@ -139,11 +171,11 @@ public class BlockCutter {
     
     public void setBatchParms(String channel, long preferredMaxBytes, long maxMessageCount) {
 
-            PreferredMaxBytes.put(channel, preferredMaxBytes);
-            MaxMessageCount.put(channel, maxMessageCount);
+        PreferredMaxBytes.put(channel, preferredMaxBytes);
+        MaxMessageCount.put(channel, maxMessageCount);
 
-            logger.info("Updated PreferredMaxBytes: " + PreferredMaxBytes);
-            logger.info("Updated MaxMessageCount: " + MaxMessageCount);
+        logger.info("Updated PreferredMaxBytes: " + PreferredMaxBytes);
+        logger.info("Updated MaxMessageCount: " + MaxMessageCount);
 
     }
     
@@ -218,8 +250,11 @@ public class BlockCutter {
 
     }
     
-    public void deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
+    public static BlockCutter deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
                 
+        
+        BlockCutter instance = getInstance();
+        
         ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
         DataInputStream in = new DataInputStream(bis);
                 
@@ -270,29 +305,28 @@ public class BlockCutter {
         ObjectInput i = null;
             
         i = new ObjectInputStream(b);
-        this.pendingBatches = (Map<String,List<byte[]>>) i.readObject();
+        instance.pendingBatches = (Map<String,List<byte[]>>) i.readObject();
         i.close();
         b.close();
         
         b = new ByteArrayInputStream(sizes);
-            
         i = new ObjectInputStream(b);
-        this.pendingBatchSizeBytes = (Map<String,Integer>) i.readObject();
+        instance.pendingBatchSizeBytes = (Map<String,Integer>) i.readObject();
         i.close();
         b.close();
         
         b = new ByteArrayInputStream(max);
-            
         i = new ObjectInputStream(b);
-        this.PreferredMaxBytes = (Map<String,Long>) i.readObject();
+        instance.PreferredMaxBytes = (Map<String,Long>) i.readObject();
         i.close();
         b.close();
         
         b = new ByteArrayInputStream(count);
-            
         i = new ObjectInputStream(b);
-        this.MaxMessageCount = (Map<String,Long>) i.readObject();
+        instance.MaxMessageCount = (Map<String,Long>) i.readObject();
         i.close();
         b.close();
+        
+        return instance;
     }
 }

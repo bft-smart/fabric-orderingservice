@@ -44,7 +44,16 @@ To compile the Java code provided by this repository, you can simply type `ant` 
 
 ## Launching 4 ordering nodes and a single frontend
 
-Edit the `./hyperledger-bftmart/config/node.config`file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
+The first step is to generate the genesis block for the ordering service. Generate the block as follows:
+
+```
+cd $GOPATH/src/github.com/hyperledger/fabric/
+./build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
+```
+
+The `<path to genesis file>` argument should match both the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file and the `GENESIS` parameter in the `./hyperledger-bftmart/config/node.config`. Keep in mind that in the case of this ordering service, the `GenesisMethod` parameter must always be set to `file`. Otherwise the frontends will generate genesis blocks distinct from the one loaded by the ordering node, thus leading to inconsistencies.
+
+After creating the genesis block, edit the `./hyperledger-bftmart/config/node.config` file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
 
 ```
 ./startReplica.sh 0
@@ -59,16 +68,9 @@ Once all nodes have outputed the message `-- Ready to process operations`, you c
 ./startFrontend.sh 1000 10 9999
 ```
 
-The first argument is the ID of the frontend, and it should match one of the IDs specified in the `RECEIVERS` parameter in the `./hyperledger-bftmart/config/node.config`file. The second argument is the number of UNIX connections available in the pool between the Go and Java components, and it should match the `ConnectionPoolSize`parameter from the `BFTsmart` section in the `./fabric/sampleconfig/orderer.yaml` file. The third parameter is the TCP port from which the Java component delivers blocks to the Go component, and should match the `RecvPort` parameter in the previous section/file.
+The first argument is the ID of the frontend, and it should match one of the IDs specified in the `RECEIVERS` parameter in the `./hyperledger-bftmart/config/node.config` file. The second argument is the number of UNIX connections available in the pool between the Go and Java components, and it should match the `ConnectionPoolSize`parameter from the `BFTsmart` section in the `./fabric/sampleconfig/orderer.yaml` file. The third parameter is the TCP port from which the Java component delivers blocks to the Go component, and should match the `RecvPort` parameter in the previous section/file.
 
-The Go component of the frontend requires a genesis block. Generate the block as follows:
-
-```
-cd $GOPATH/src/github.com/hyperledger/fabric/
-./build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID <system channel ID> -outputBlock <path to genesis file>
-```
-
-The `<path to genesis file>` argument should match the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file. You can now launch the Go component as follows:
+You can now launch the Go component as follows:
 
 ```
 ./build/bin/orderer start
@@ -124,7 +126,7 @@ cd $GOPATH/src/github.com/hyperledger/fabric/
 Launch a client to submit transactions to the service as follows:
 
 ```
-./orderer/sample_clients/broadcast_timestamp/broadcast_timestamp --channelID <system channel ID> --size <size of each transaction> --messages <number of transactions to send>
+./orderer/sample_clients/broadcast_msg/broadcast_msg --channelID <system channel ID> --size <size of each transaction> --messages <number of transactions to send>
 ```
   
 You can also create a new channel as follows:

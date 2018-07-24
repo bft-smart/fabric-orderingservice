@@ -9,24 +9,19 @@ import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
-import bftsmart.tom.util.TOMUtil;
 import com.etsy.net.JUDS;
 import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.PrivateKey;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
@@ -50,22 +45,15 @@ import org.hyperledger.fabric.protos.orderer.Configuration;
  */
 public class BFTProxy {
 
-    /**
-     * @param args the command line arguments
-     */
     private static UnixDomainSocketServer recvServer = null;
     private static ServerSocket sendServer = null;
     private static DataInputStream is;
-    private static DataOutputStream os;
     private static UnixDomainSocket recvSocket = null;
     private static Socket sendSocket = null;
-    private static ReceiverThread[] recvPool = null;
     private static ExecutorService executor = null;
     private static Map<String, DataOutputStream> outputs;
     private static Map<String, Timer> timers;
 
-    private static long PreferredMaxBytes = 0;
-    private static long MaxMessageCount = 0;
     private static Map<String, Long> BatchTimeout;
     private static int initID;
     private static int nextID;
@@ -75,13 +63,13 @@ public class BFTProxy {
     private static Log logger;
     
     //measurements
-    private static int interval = 10000;
+    private static final int interval = 10000;
     private static long envelopeMeasurementStartTime = -1;
-    private static long blockMeasurementStartTime = -1;
-    private static long sigsMeasurementStartTime = -1;
+    private static final long blockMeasurementStartTime = -1;
+    private static final long sigsMeasurementStartTime = -1;
     private static int countEnvelopes = 0;
-    private static int countBlocks = 0;
-    private static int countSigs = 0;
+    private static final int countBlocks = 0;
+    private static final int countSigs = 0;
 
     public static void main(String args[]) {
 
@@ -89,7 +77,7 @@ public class BFTProxy {
             System.out.println("Use: java BFTNode <proxy id> <pool size> <send port>");
             System.exit(-1);
         }    
-        
+                
         BFTProxy.logger = LogFactory.getLog(BFTProxy.class);
         initID = Integer.parseInt(args[0]);
         nextID = initID + 1;
@@ -101,9 +89,11 @@ public class BFTProxy {
         
         try {
             
+            BFTCommon.init(null);
+
             logger.info("Creating UNIX socket...");
             
-            Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "hlf-pool.sock");
+            Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "hlf-pool-"+sendPort+".sock");
             
             Files.deleteIfExists(p);
             
@@ -131,7 +121,7 @@ public class BFTProxy {
             BatchTimeout = new TreeMap<>();
                         
             // request latest reply sequence from the ordering nodes
-            sysProxy.invokeAsynchRequest(assembleSignedRequest("SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
                                    
             new SenderThread().start();
 
@@ -143,28 +133,15 @@ public class BFTProxy {
 
                 String channel = readString(is);
                                 
-                byte[] bytes = readBytes(is);
+                //byte[] bytes = readBytes(is);
                 
                 outputs.put(channel, os);
-                
-                PreferredMaxBytes = readInt();
-
-                logger.info("Read PreferredMaxBytes: " + PreferredMaxBytes);
-
-                MaxMessageCount = readInt();
-
-                logger.info("Read MaxMessageCount: " + MaxMessageCount);
 
                 BatchTimeout.put(channel, readLong(is));
 
                 logger.info("Read BatchTimeout: " + BatchTimeout.get(channel));
-                
-                ByteBuffer buffer = ByteBuffer.allocate((Long.BYTES*2) + bytes.length);
-                buffer.putLong(PreferredMaxBytes);
-                buffer.putLong(MaxMessageCount);
-                buffer.put(bytes);
                
-                sysProxy.invokeAsynchRequest(assembleSignedRequest("NEWCHANNEL", channel, buffer.array()), null, TOMMessageType.ORDERED_REQUEST);
+                //sysProxy.invokeAsynchRequest(BFTUtil.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getRSAPrivateKey(), "NEWCHANNEL", channel, bytes), null, TOMMessageType.ORDERED_REQUEST);
                 
                 Timer timer = new Timer();
                 timer.schedule(new BatchTimeout(channel), (BatchTimeout.get(channel) / 1000000));
@@ -176,7 +153,7 @@ public class BFTProxy {
             
             }
 
-        } catch (IOException e) {
+        } catch (IOException | NoSuchAlgorithmException | NoSuchProviderException e) {
             e.printStackTrace();
         }
     }
@@ -247,19 +224,6 @@ public class BFTProxy {
         return value;
 
     }
-    
-    static private byte[] serializeBatchParams() throws IOException {
-
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutput out = new ObjectOutputStream(bos);
-        out.writeLong(PreferredMaxBytes);
-        out.writeLong(MaxMessageCount);
-        out.flush();
-        bos.flush();
-        out.close();
-        bos.close();
-        return bos.toByteArray();
-    }
             
     private static synchronized void resetTimer(String channel) {
         
@@ -269,55 +233,6 @@ public class BFTProxy {
         timers.put(channel, timer);
     }
     
-    private static byte[] serializeRequest(String type, String channelID, byte[] payload) throws IOException {
-            
-        ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
-        DataOutput out = new DataOutputStream(bos);
-
-        out.writeUTF(type);
-        out.writeUTF(channelID);
-        out.writeInt(payload.length);
-        out.write(payload);
-
-        bos.flush();
-
-        bos.close();
-        
-        return bos.toByteArray();
-    }
-    
-    public static byte[] assembleSignedRequest(String type, String channelID, byte[] payload) throws IOException {
-            
-        PrivateKey key = sysProxy.getViewManager().getStaticConf().getRSAPrivateKey();        
-            
-        ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
-        DataOutput out = new DataOutputStream(bos);
-
-        out.writeUTF(type);
-        out.writeUTF(channelID);
-        out.writeInt(payload.length);
-        out.write(payload);
-
-        bos.flush();
-        bos.close();
-
-        byte[] msg = bos.toByteArray();
-        
-        byte[] sig = TOMUtil.signMessage(key, msg);
-        
-        bos = new ByteArrayOutputStream(msg.length+sig.length);
-        out = new DataOutputStream(bos);
-        
-        out.writeInt(msg.length);
-        out.write(msg);
-        out.writeInt(sig.length);
-        out.write(sig);
-        
-        bos.flush();
-        bos.close();
-        
-        return bos.toByteArray();
-    }
             
     private static class ReceiverThread extends Thread {
         
@@ -348,15 +263,12 @@ public class BFTProxy {
                     id = readString(this.input);
                     isConfig = readBoolean(this.input);
                     env = readBytes(this.input);
-                
-                    //logger.debug("Received envelope at connection #" + this.id);
-                
+                                
                     resetTimer(id);
 
-                    //CommonProtos.Envelope env = CommonProtos.Envelope.parseFrom(bytes);
                     logger.debug("Received envelope" + Arrays.toString(env) + " for channel id " + id + (isConfig ? " (type config)" : " (type normal)"));
 
-                    this.out.invokeAsynchRequest(serializeRequest((isConfig ? "CONFIG" : "REGULAR"), id, env), new bftsmart.communication.client.ReplyListener(){
+                    this.out.invokeAsynchRequest(BFTCommon.serializeRequest((isConfig ? "CONFIG" : "REGULAR"), id, env), new bftsmart.communication.client.ReplyListener(){
 
                         private int replies = 0;
 
@@ -423,6 +335,8 @@ public class BFTProxy {
 
                 Map.Entry<String,Common.Block> reply = sysProxy.getNext();
                 
+                System.out.println("Received block # " + reply.getValue().getHeader().getNumber());
+                
                 if (reply != null) {
 
                     try {
@@ -442,7 +356,7 @@ public class BFTProxy {
                                 Map<String,Configtx.ConfigGroup> groups = confEnv.getConfig().getChannelGroup().getGroupsMap();
                                 Configuration.BatchTimeout timeout = Configuration.BatchTimeout.parseFrom(groups.get("Orderer").getValuesMap().get("BatchTimeout").getValue());
 
-                                Duration duration = Duration.parse("PT"+timeout.getTimeout().trim().replaceAll("\\s+",""));
+                                Duration duration = BFTCommon.parseDuration(timeout.getTimeout());
                                 BatchTimeout.put(params[0], duration.toNanos());
                             
                             }
@@ -479,7 +393,7 @@ public class BFTProxy {
         public void run() {
             
             try {
-                int reqId = sysProxy.invokeAsynchRequest(assembleSignedRequest("TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
+                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getRSAPrivateKey(), "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
                 sysProxy.cleanAsynchRequest(reqId);
                 
                 Timer timer = new Timer();
