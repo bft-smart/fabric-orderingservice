@@ -11,9 +11,9 @@ function main () {
 	#	exit 1
 	#fi
 
-	if [[ "$(docker images -q bftsmart/fabric-orderingnode 2> /dev/null)" == "" ]]; then
+	if [[ "$(docker images -q bftsmart/fabric-frontend 2> /dev/null)" == "" ]]; then
 
-		echo "bftsmart/fabric-orderingnode missing, either pull it from repository or compile it"
+		echo "bftsmart/fabric-frontend missing, either pull it from repository or compile it"
 		exit 1
 		
 	fi
