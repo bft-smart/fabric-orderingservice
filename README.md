@@ -53,7 +53,18 @@ cd $GOPATH/src/github.com/hyperledger/fabric/
 
 The `<path to genesis file>` argument should match both the absolute path in the `GenesisFile` parameter in the `General` section in of the `./fabric/sampleconfig/orderer.yaml` configuration file and the `GENESIS` parameter in the `./hyperledger-bftmart/config/node.config`. Keep in mind that in the case of this ordering service, the `GenesisMethod` parameter must always be set to `file`. Otherwise the frontends will generate genesis blocks distinct from the one loaded by the ordering node, thus leading to inconsistencies.
 
-After creating the genesis block, edit the `./hyperledger-bftmart/config/node.config` file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the  `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
+After creating the genesis block, edit the  `./hyperledger-bftmart/config/hosts.config` file with the loopback address for your machine. It should look something like this:
+
+```
+#server id, address and port (the ids from 0 to n-1 are the service replicas) 
+0 127.0.0.1 11000
+1 127.0.0.1 11010
+2 127.0.0.1 11020
+3 127.0.0.1 11030
+7001 127.0.0.1 11100
+```
+
+Next, edit the `./hyperledger-bftmart/config/node.config` file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
 
 ```
 ./startReplica.sh 0
