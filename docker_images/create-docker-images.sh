@@ -4,11 +4,18 @@
 
 function main() {
 
+	if [ $# -eq 0 ]; then
+
+		echo "Usage: $0 <system channel name> [clean]"
+		echo "Use 'clean' to deleted the auxiliary images (bftsmart/fabric and bftsmart/fabric-common)"
+		exit 1
+	fi
+
 	cd ..
 
-	if [ ! -f dist/BFT-Proxy.jar ]; then
+	#if [ ! -f dist/BFT-Proxy.jar ]; then
 	    ant
-	fi
+	#fi
 
 	cd docker_images
 
@@ -53,8 +60,8 @@ function main() {
 	fi
 
 
-	create_hosts_config
-	create_node_config
+	#create_hosts_config
+	#create_node_config
 	create_fabric_configtx
 	create_fabric_orderer
 
@@ -82,56 +89,61 @@ function main() {
 	create_fabric_core
 
 	docker-compose build tools
+
+	if [ ! -z "$2" ] && [ $2 -eq "clean" ] ; then
+		docker rmi bftsmart/fabric
+		docker rmi bftsmart/fabric-common
+	fi
 }
 
-function create_hosts_config () {
+#function create_hosts_config () {
 
-cat > ./temp/config/hosts.config << 'EOF'
-0 172.17.0.2 11000
-1 172.17.0.3 11010
-2 172.17.0.4 11020
-3 172.17.0.5 11030
-7001 127.0.0.1 11100
-EOF
+#cat > ./temp/config/hosts.config << 'EOF'
+#0 172.17.0.2 11000
+#1 172.17.0.3 11010
+#2 172.17.0.4 11020
+#3 172.17.0.5 11030
+#7001 127.0.0.1 11100
+#EOF
 
-}
+#}
 
-function create_node_config () {
+#function create_node_config () {
 
-cat > ./temp/config/node.config << 'EOF'
+#cat > ./temp/config/node.config << 'EOF'
 #Path to the genesis block for the system channel
-GENESIS=/etc/bftsmart-orderer/config/genesisblock
+#GENESIS=/etc/bftsmart-orderer/config/genesisblock
 
-#The ID of the membership service provider (MSP)
-MSPID=DEFAULT
+##The ID of the membership service provider (MSP)
+#MSPID=DEFAULT
 
-#Certificate of the node, compliant to Fabric's MSP guidelines
-CERTIFICATE=/etc/bftsmart-orderer/config/cert.pem
+##Certificate of the node, compliant to Fabric's MSP guidelines
+#CERTIFICATE=/etc/bftsmart-orderer/config/cert.pem
 
-#Private key of the node, compliant to Fabric's MSP guidelines
-PRIVKEY=/etc/bftsmart-orderer/config/key.pem
+##Private key of the node, compliant to Fabric's MSP guidelines
+#PRIVKEY=/etc/bftsmart-orderer/config/key.pem
 
-#Number of block generation threads in the pool
-PARELLELISM=10
+##Number of block generation threads in the pool
+#PARELLELISM=10
 
-#Maximum number of blocks to submit to each signer/sending thread
-BLOCKS_PER_THREAD=10000
+##Maximum number of blocks to submit to each signer/sending thread
+#BLOCKS_PER_THREAD=10000
 
-#IDs of the frontends present in the system, separate by commas
-RECEIVERS=1000,2000
+##IDs of the frontends present in the system, separate by commas
+#RECEIVERS=1000,2000
 
-#Enable/disable envelope validation. Configuration envelopes are always verified regardless of this parameter
-ENV_VALIDATION=true
+##Enable/disable envelope validation. Configuration envelopes are always verified regardless of this parameter
+#ENV_VALIDATION=true
 
-#Enable/disable second block signature. Useful for benchmarking, but it must be enabled on production deployments, so that it abides to Fabric's implementation
-BOTH_SIGS=true
+##Enable/disable second block signature. Useful for benchmarking, but it must be enabled on production deployments, so that it abides to Fabric's implementation
+#BOTH_SIGS=true
 
-#The acceptable difference between the state machine's time and the client's time. Only used if envelope validation is active
-#or in the case of a reconfiguration envelope
-TIME_WINDOW=15m
-EOF
+##The acceptable difference between the state machine's time and the client's time. Only used if envelope validation is active
+##or in the case of a reconfiguration envelope
+#TIME_WINDOW=15m
+#EOF
 
-}
+#}
 
 function create_fabric_configtx () {
 
