@@ -13,6 +13,14 @@ services:
     depends_on:
       - common
 
+  prepared_frontend:
+
+    image: bftsmart/fabric-prepared_frontend
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-prepared_frontend
+
   orderingnode:
 
     image: bftsmart/fabric-orderingnode
@@ -23,6 +31,14 @@ services:
 
     depends_on:
       - common
+
+  prepared_orderingnode:
+
+    image: bftsmart/fabric-prepared_orderingnode
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-prepared_orderingnode
 
   fabric:
 

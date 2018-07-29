@@ -1,0 +1,10 @@
+FROM bftsmart/fabric-frontend
+
+ADD ./frontend_material/hosts.config /etc/bftsmart-orderer/config/hosts.config
+ADD ./frontend_material/system.config /etc/bftsmart-orderer/config/system.config
+ADD ./frontend_material/genesisblock /etc/bftsmart-orderer/config/genesisblock
+
+RUN rm -R /etc/hyperledger/fabric
+RUN mkdir /etc/hyperledger/fabric
+
+ADD ./frontend_material/fabric /etc/hyperledger/fabric/
