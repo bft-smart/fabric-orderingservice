@@ -1,3 +1,4 @@
 build/
 dist/
 config/currentView
+docker_images/temp

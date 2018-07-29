@@ -1,0 +1,26 @@
+FROM hyperledger/fabric-tools:x86_64-1.1.1
+
+WORKDIR /
+
+ADD temp/configtxgen /usr/local/bin/configtxgen
+ADD temp/broadcast_config /usr/local/bin/broadcast_config
+ADD temp/broadcast_msg /usr/local/bin/broadcast_msg
+ADD temp/deliver_stdout /usr/local/bin/deliver_stdout
+
+ADD temp/fabric_conf/configtx.yaml /etc/hyperledger/fabric/configtx.yaml
+ADD temp/fabric_conf/core.yaml /etc/hyperledger/fabric/core.yaml
+
+WORKDIR $GOPATH
+
+RUN mkdir src
+RUN mkdir src/github.com
+RUN mkdir src/github.com/hyperledger
+RUN mkdir src/github.com/hyperledger/fabric
+RUN mkdir src/github.com/hyperledger/fabric/examples
+RUN mkdir src/github.com/hyperledger/fabric/examples/chaincode
+
+WORKDIR src/github.com/hyperledger/fabric/examples/chaincode
+
+ADD temp/chaincode ./
+
+WORKDIR /

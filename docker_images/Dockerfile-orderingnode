@@ -1,0 +1,12 @@
+FROM bftsmart/fabric-common
+
+ADD ./temp/sampleconfig/msp/signcerts/peer.pem /etc/bftsmart-orderer/config/cert.pem
+ADD ./temp/sampleconfig/msp/keystore/key.pem /etc/bftsmart-orderer/config/key.pem
+
+RUN apt-get autoremove -y
+RUN apt-get clean -y
+
+WORKDIR /etc/bftsmart-orderer/
+
+ENTRYPOINT ["java", "-cp", "bin/orderingservice.jar:lib/*", "bft.BFTNode"]
+CMD [""]

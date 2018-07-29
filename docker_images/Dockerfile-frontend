@@ -1,0 +1,31 @@
+FROM bftsmart/fabric-common
+
+RUN apt-get -y install libltdl7
+
+WORKDIR /etc/hyperledger/fabric
+
+ADD temp/sampleconfig/ ./
+
+WORKDIR /
+
+ADD temp/orderer /usr/bin/orderer
+ADD temp/configtxgen /usr/bin/configtxgen
+ADD temp/libunixdomainsocket-linux-i386.so /usr/lib/
+ADD temp/libunixdomainsocket-linux-x86_64.so /usr/lib/
+
+ENV FABRIC_CFG_PATH=/etc/hyperledger/fabric/
+
+RUN apt-get purge -y git-all build-essential autoconf
+RUN apt-get autoremove -y
+RUN apt-get clean -y
+
+WORKDIR /etc/bftsmart-orderer/
+
+RUN echo "#!/bin/bash" > startFrontend.sh
+RUN echo "java -cp bin/orderingservice.jar:lib/* bft.BFTProxy \$1 \$2 \$3 &" >> startFrontend.sh
+RUN echo "sleep 2" >> startFrontend.sh
+RUN echo "orderer start" >> startFrontend.sh
+RUN chmod +x ./startFrontend.sh
+
+ENTRYPOINT ["./startFrontend.sh"]
+CMD ["1000", "10", "9999"]

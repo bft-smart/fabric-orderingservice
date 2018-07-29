@@ -1,0 +1,49 @@
+version: '3'
+
+services:
+
+  frontend:
+
+    image: bftsmart/fabric-frontend
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-frontend
+
+    depends_on:
+      - common
+
+  orderingnode:
+
+    image: bftsmart/fabric-orderingnode
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-orderingnode
+
+    depends_on:
+      - common
+
+  fabric:
+
+    image: bftsmart/fabric
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-fabric
+
+  common:
+
+    image: bftsmart/fabric-common
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-common
+
+  tools:
+
+    image: bftsmart/fabric-tools
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-tools
