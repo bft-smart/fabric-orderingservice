@@ -24,6 +24,85 @@ Because this ordering service needs to be integrated into the HLF codebase, it r
 
 Besides the aforementioned dependecies, this service also uses the JUDS library to provide UNIX sockets for communication between the Java and Go components. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from [here](https://github.com/mcfunley/juds) and go through the installation steps described in the README.
 
+## Quick start
+
+You can launch Fabric locally with this ordering service comprised by a single peer, one frontend and 4 ordering nodes by following the following steps.
+
+1. Fetch the following docker images as follows:
+
+```
+docker pull bftsmart/fabric-orderingnode
+docker pull bftsmart/fabric-frontend
+docker pull bftsmart/fabric-tools
+docker pull hyperledger/fabric-peer:x86_64-1.1.1
+```
+As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration.
+
+2. For this step, you should make sure you are not executing any container. This is because the images are already configured with docker images allocated to the addressses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start containers for the downloaded images in the following order (each from a different terminal):
+
+```
+docker run -i -t -P bftsmart/fabric-orderingnode 0
+docker run -i -t -P bftsmart/fabric-orderingnode 1
+docker run -i -t -P bftsmart/fabric-orderingnode 2
+docker run -i -t -P bftsmart/fabric-orderingnode 3
+docker run -i -t -P bftsmart/fabric-frontend
+docker run -i -t -P -v /var/run/:/var/run/ hyperledger/fabric-peer:x86_64-1.1.1
+docker run -i -t -P bftsmart/fabric-tools
+```
+Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it.
+
+3. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
+
+```
+configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx channel.tx -channelID channel47
+configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate anchor.tx -channelID channel47 -asOrg SampleOrg
+```
+Notice we are not generating the genesis block for the system channel because the images already come with one generated. The name of the system channel is "bftchannel".
+
+4. If you were not executing any container before following this instructions, the frontend should have been assigned the address "172.17.0.6". Send the transactions to the orderng service by providing the frontend's entrypoint as follows:
+
+```
+peer channel create -o 172.17.0.6:7050 -c channel47 -f channel.tx 
+peer channel update -o 172.17.0.6:7050 -c channel47 -f anchor.tx
+```
+
+You should now have a file named "channel47.block" in your current directory of the container. You can use it to make the peer join the channel as follows:
+
+```
+peer channel join -b channel47.block
+```
+
+5. Install and instantiate the example chaincode included in the container as follows:
+
+```
+peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+peer chaincode instantiate -o 172.17.0.6:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
+```
+
+6. You can now perform queries and invocations to the chaincode:
+
+```
+peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 001 Using default escc
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 002 Using default vscc
+Query Result: 100
+
+peer chaincode invoke -C channel47 -n example02 -v 1.0 -c '{"Args":["invoke","a","b","10"]}'
+
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] InitCmdFactory -> INFO 001 Get chain(channel47) orderer endpoint: 172.17.0.6:7050
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 002 Using default escc
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 003 Using default vscc
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] chaincodeInvokeOrQuery -> INFO 004 Chaincode invoke successful. result: status:200 
+2018-xx-xx xx:xx:xx.xx UTC [main] main -> INFO 005 Exiting.....
+
+peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 001 Using default escc
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 002 Using default vscc
+Query Result: 90
+```
+
 ## Compiling
 
 Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
