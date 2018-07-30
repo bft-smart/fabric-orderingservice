@@ -38,7 +38,7 @@ docker pull hyperledger/fabric-peer:x86_64-1.1.1
 ```
 As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration.
 
-2. For this step, you should make sure you are not executing any container. This is because the images are already configured with docker images allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start new containers for the downloaded images in the following order (each one from a different terminal):
+2. For this step, you should make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start new containers for the downloaded images in the following order (each one from a different terminal):
 
 ```
 docker run -i -t -P bftsmart/fabric-orderingnode 0
