@@ -21,7 +21,7 @@ function main () {
 
 	docker pull bftsmart/fabric-tools
 
-	docker create -i -t --name=$my_contianer_name -e core_peer_address=$endpoint "bftsmart/fabric-tools" > /dev/null
+	docker create -i -t --name=$my_contianer_name -e CORE_PEER_ADDRESS=$endpoint "bftsmart/fabric-tools" > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	echo ""
