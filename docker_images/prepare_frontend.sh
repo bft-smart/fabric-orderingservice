@@ -18,8 +18,8 @@ function main () {
 		
 	fi
 
-	docker create --name="os-temp" "bftsmart/fabric-frontend"
-	id=$(docker ps -aqf "name=os-temp")
+	docker create --name="frontend-temp" "bftsmart/fabric-frontend"
+	id=$(docker ps -aqf "name=frontend-temp")
 
 	if [ ! -d ./frontend_material ]; then
 	    mkdir ./frontend_material
