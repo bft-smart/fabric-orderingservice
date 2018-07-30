@@ -123,7 +123,7 @@ To compile the Java code provided by this repository, you can simply type `ant` 
 
 ## Executing the compiled code without docker
 
-# Launching 4 ordering nodes and a single frontend
+### Launching 4 ordering nodes and a single frontend
 
 The first step is to generate the genesis block for the ordering service. Generate the block as follows:
 
@@ -168,7 +168,7 @@ You can now launch the Go component as follows:
 ./build/bin/orderer start
 ```
 
-# Running the example chaincode
+### Running the example chaincode
 
 To execute an example chaincode using this ordering service, generate the rest of the HLF artifacts as follows:
 
@@ -202,7 +202,7 @@ Use a client to join a channel and install/execute chaincode as follows:
 ./build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
 ```
 
-# Running with the sample clients
+### Running with the sample clients
 
 To submit a heavy workload of representative transactions using the sample clients available in `./fabric/sample_clients`, execute the commands bellow in the following order:
 
@@ -227,7 +227,7 @@ You can also create a new channel as follows:
 ./orderer/sample_clients/broadcast_config/broadcast_config --cmd newChain --chainID <channel ID>
   ```
 
-# Running the code in a distributed setting
+### Running the code in a distributed setting
 
 The HLF codebase provided by the fork can be configured and deployed in a distributed setting in the same way as the original. In order to make sure the distributed deployment still uses this ordering service, the genesis block must be generated from a profile that sets the ordering service type to `bftsmart`.
 
