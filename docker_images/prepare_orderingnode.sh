@@ -25,10 +25,10 @@ function main () {
 		
 	#fi
 
-	docker pull bftsmart/fabric-orderingnode
-
 	my_contianer_name=$1
 	my_node_id=$2
+
+	docker pull bftsmart/fabric-orderingnode
 
 	docker create --name="os-temp" "bftsmart/fabric-orderingnode" > /dev/null
 	id=$(docker ps -aqf "name=os-temp")
@@ -108,6 +108,7 @@ function main () {
 	echo ""
 	echo "Container ID for $my_contianer_name is $id"
 	echo "Launch the ordering node by typing 'docker start -a $id'"
+	echo "Stop the ordering node by typing 'docker stop $id'"
 	echo ""
 }
 
