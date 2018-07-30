@@ -26,7 +26,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can launch Fabric locally with this ordering service comprised by a single peer, one frontend and 4 ordering nodes by following the following steps.
+You can launch Fabric locally with this ordering service comprised by a single peer, one frontend and 4 ordering nodes by following the steps described bellow.
 
 1. Download the following docker images:
 
