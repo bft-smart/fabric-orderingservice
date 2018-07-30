@@ -1,11 +1,17 @@
 FROM hyperledger/fabric-tools:x86_64-1.1.1
 
+RUN apt-get update
+RUN apt-get install -y nano jq
+
 WORKDIR /
 
 ADD temp/configtxgen /usr/local/bin/configtxgen
 ADD temp/broadcast_config /usr/local/bin/broadcast_config
 ADD temp/broadcast_msg /usr/local/bin/broadcast_msg
 ADD temp/deliver_stdout /usr/local/bin/deliver_stdout
+ADD temp/update_frontend_entrypoint.sh /usr/local/bin/update_frontend_entrypoint.sh
+
+RUN chmod +x /usr/local/bin/update_frontend_entrypoint.sh
 
 ADD temp/fabric_conf/configtx.yaml /etc/hyperledger/fabric/configtx.yaml
 ADD temp/fabric_conf/core.yaml /etc/hyperledger/fabric/core.yaml
