@@ -2,7 +2,7 @@
 
 function main () {
 
-	#re='^[0-9]+$'
+	re='^[0-9]+$'
 
 	#if [ $# -eq 0 ] || [[ ! $1 =~ $re ]]; then
 
@@ -81,7 +81,7 @@ function main () {
 
 	eval $(parse_yaml ./frontend_material/fabric/orderer.yaml "orderer_")
 
-	echo $orderer_General_ListenPort $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort
+	#echo $orderer_General_ListenPort $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort
 
 	docker create -i -t -p $orderer_General_ListenPort:$orderer_General_ListenPort --name=$my_contianer_name "bftsmart/fabric-frontend" $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
@@ -91,12 +91,10 @@ function main () {
 	docker cp ./frontend_material/genesisblock $id:/etc/bftsmart-orderer/config/genesisblock
 	docker cp ./frontend_material/fabric $id:/etc/hyperledger/fabric/
 
-	#docker-compose build prepared_frontend
-
 	echo ""
 	echo "Container ID for $my_contianer_name is $id"
-	echo "Launch the frontend by typing 'docker start -a $id'"
-	echo "Stop the frontend by typing 'docker stop $id'"
+	echo "Launch the frontend by typing 'docker start -a $my_contianer_name'"
+	echo "Stop the frontend by typing 'docker stop $my_contianer_name'"
 	echo ""
 }
 
@@ -104,7 +102,7 @@ parse_yaml() {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
    sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
-        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p" $1 | sed 's/\$/\\\$/g' |
    awk -F$fs '{
       indent = length($1)/4;
       vname[indent] = $2;

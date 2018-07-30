@@ -107,8 +107,8 @@ function main () {
 
 	echo ""
 	echo "Container ID for $my_contianer_name is $id"
-	echo "Launch the ordering node by typing 'docker start -a $id'"
-	echo "Stop the ordering node by typing 'docker stop $id'"
+	echo "Launch the ordering node by typing 'docker start -a $my_contianer_name'"
+	echo "Stop the ordering node by typing 'docker stop $my_contianer_name'"
 	echo ""
 }
 
