@@ -18,7 +18,7 @@ For more information regarding this project, check out the technical report avai
 
 ## Pre-requisites
 
-This ordering service was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1.
+This ordering service was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1. The docker images provided in Docker Hub are compatible with Docker 1.13.1 and above.
 
 Because this ordering service needs to be integrated into the HLF codebase, it requires the HLF fork repository available [here](https://github.com/jcs47/fabric) instead of the official repository. This means that all dependencies associated with the offical HLF codebase are still required for this fork. The pre-requisites associated to the HLF codebase can be found [here](http://hyperledger-fabric.readthedocs.io/en/release/prereqs.html).
 
@@ -28,7 +28,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 You can launch Fabric locally with this ordering service comprised by a single peer, one frontend and 4 ordering nodes by following the following steps.
 
-1. Fetch the following docker images as follows:
+1. Download the following docker images:
 
 ```
 docker pull bftsmart/fabric-orderingnode
@@ -38,7 +38,7 @@ docker pull hyperledger/fabric-peer:x86_64-1.1.1
 ```
 As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration.
 
-2. For this step, you should make sure you are not executing any container. This is because the images are already configured with docker images allocated to the addressses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start containers for the downloaded images in the following order (each from a different terminal):
+2. For this step, you should make sure you are not executing any container. This is because the images are already configured with docker images allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start new containers for the downloaded images in the following order (each one from a different terminal):
 
 ```
 docker run -i -t -P bftsmart/fabric-orderingnode 0
@@ -119,7 +119,7 @@ make dist-clean peer orderer configtxgen
 
 Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolute path of the `./sampleconfig` directory of the fork. You should be able to do this by typing `export FABRIC_CFG_PATH=$GOPATH/src/github.com/hyperledger/fabric/sampleconfig/` in the command line. If you are using multiple terminals, you might need to type this command in each one of them.
 
-To compile the Java code provided by this repository, you can simply type `ant` in its main folder.
+To compile the Java code provided by this repository, you can simply type `ant` in its main folder. To compile the images available at Docker Hub, enter the `docker_images` sub-directory and run the `create_docker_images.sh` script (you will need to provide the name for the system channel as an argument).
 
 ## Launching 4 ordering nodes and a single frontend
 
