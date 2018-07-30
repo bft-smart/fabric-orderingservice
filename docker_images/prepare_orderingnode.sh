@@ -18,17 +18,19 @@ function main () {
 		exit 1
 	fi
 
-	if [[ "$(docker images -q bftsmart/fabric-orderingnode 2> /dev/null)" == "" ]]; then
+	#if [[ "$(docker images -q bftsmart/fabric-orderingnode 2> /dev/null)" == "" ]]; then
 
-		echo "bftsmart/fabric-orderingnode missing, either pull it from repository or compile it"
-		exit 1
+	#	echo "bftsmart/fabric-orderingnode missing, either pull it from repository or compile it"
+	#	exit 1
 		
-	fi
+	#fi
+
+	docker pull bftsmart/fabric-orderingnode
 
 	my_contianer_name=$1
 	my_node_id=$2
 
-	docker create --name="os-temp" "bftsmart/fabric-orderingnode"
+	docker create --name="os-temp" "bftsmart/fabric-orderingnode" > /dev/null
 	id=$(docker ps -aqf "name=os-temp")
 
 	if [ ! -d ./orderingnode_material ]; then
@@ -58,7 +60,7 @@ function main () {
 		docker cp $id:/etc/bftsmart-orderer/config/key.pem ./orderingnode_material
 	fi
 
-	docker rm -v $id
+	docker rm -v $id > /dev/null
 
 	my_port=-1
 	
@@ -82,7 +84,6 @@ function main () {
 		fi
 	done < ./orderingnode_material/hosts.config
 
-	echo "my port is $my_port"
 
 	if [ $my_port -eq -1 ]; then
 
@@ -95,7 +96,7 @@ function main () {
 
 	#docker-compose build --build-arg prepared_orderingnode
 
-	docker create -i -t -p $my_port:$my_port -p $my_other_port:$my_other_port --name=$my_contianer_name "bftsmart/fabric-orderingnode" $my_node_id
+	docker create -i -t -p $my_port:$my_port -p $my_other_port:$my_other_port --name=$my_contianer_name "bftsmart/fabric-orderingnode" $my_node_id > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	docker cp ./orderingnode_material/hosts.config $id:/etc/bftsmart-orderer/config/hosts.config
@@ -104,7 +105,10 @@ function main () {
 	docker cp ./orderingnode_material/cert.pem $id:/etc/bftsmart-orderer/config/cert.pem
 	docker cp ./orderingnode_material/key.pem $id:/etc/bftsmart-orderer/config/key.pem
 
-	echo "Container ID for my_contianer_name is $id"
+	echo ""
+	echo "Container ID for $my_contianer_name is $id"
+	echo "Launch the ordering node by typing 'docker start -a $id'"
+	echo ""
 }
 
 main "$@"

@@ -5,6 +5,8 @@ RUN apt-get -y install libltdl7
 WORKDIR /etc/hyperledger/fabric
 
 ADD temp/sampleconfig/ ./
+RUN rm ./core.yaml
+RUN rm ./configtx.yaml
 
 WORKDIR /
 
