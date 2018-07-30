@@ -121,7 +121,9 @@ Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolut
 
 To compile the Java code provided by this repository, you can simply type `ant` in its main folder. To compile the images available at Docker Hub, enter the `docker_images` sub-directory and run the `create_docker_images.sh` script (you will need to provide the name for the system channel as an argument).
 
-## Launching 4 ordering nodes and a single frontend
+## Executing the compiled code without docker
+
+# Launching 4 ordering nodes and a single frontend
 
 The first step is to generate the genesis block for the ordering service. Generate the block as follows:
 
@@ -166,7 +168,7 @@ You can now launch the Go component as follows:
 ./build/bin/orderer start
 ```
 
-## Running an example chaincode
+# Running the example chaincode
 
 To execute an example chaincode using this ordering service, generate the rest of the HLF artifacts as follows:
 
@@ -200,7 +202,7 @@ Use a client to join a channel and install/execute chaincode as follows:
 ./build/bin/peer chaincode query -C <channel ID> -n <chaincode ID> -v 1.0 -c '{"Args":["query","a"]}'
 ```
 
-## Running with the sample clients
+# Running with the sample clients
 
 To submit a heavy workload of representative transactions using the sample clients available in `./fabric/sample_clients`, execute the commands bellow in the following order:
 
@@ -225,7 +227,7 @@ You can also create a new channel as follows:
 ./orderer/sample_clients/broadcast_config/broadcast_config --cmd newChain --chainID <channel ID>
   ```
 
-## Running the ordering service in a distributed setting
+# Running the code in a distributed setting
 
 The HLF codebase provided by the fork can be configured and deployed in a distributed setting in the same way as the original. In order to make sure the distributed deployment still uses this ordering service, the genesis block must be generated from a profile that sets the ordering service type to `bftsmart`.
 
@@ -247,7 +249,5 @@ In order to remove a node from the group, use the same script specifying only th
 
 ## Limitations
 
-As described above, the current implementation of this ordering service supports state transfer and on-the-fly reconfiguration of the set of ordering nodes. However, this does not extends to the set of frontends yet.
-
-Since the ordering nodes execute a BFT consensus algorithm and each one produces a ECDSA signature for each block, malicious nodes are unable to disrupt the service (as long as the number of malicious nodes in the system do not exceed `f`). However, they perform minimal verifications on the transactions; verification of the endorsing peers' signatures and policies are done at the frontends, before they relay transactions to the consensus algorithm. This means that a malicious frontend is still able to skip these verifications and relay non-complient transactions to the ledger(s). Nonetheless, the BFT consensus algorithm ensures that correct nodes receive all transactions by the same order and generate the same blocks at each correct node. In essence, ledger(s) may contain elicit transactions, but legit transactions cannot be prevented from being added to the ledger(s).
+The current codebase is compatible with, and as been tested for Fabic v1.1.1, but not yet with v1.2. Addtionally, and as described above, the current implementation of this ordering service supports state transfer and on-the-fly reconfiguration of the set of ordering nodes. However, this does not extends to the set of frontends yet.
 
