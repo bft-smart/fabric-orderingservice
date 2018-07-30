@@ -1,8 +1,0 @@
-FROM bftsmart/fabric-orderingnode
-
-ADD ./orderingnode_material/hosts.config /etc/bftsmart-orderer/config/hosts.config
-ADD ./orderingnode_material/system.config /etc/bftsmart-orderer/config/system.config
-ADD ./orderingnode_material/genesisblock /etc/bftsmart-orderer/config/genesisblock
-ADD ./orderingnode_material/cert.pem /etc/bftsmart-orderer/config/cert.pem
-ADD ./orderingnode_material/key.pem /etc/bftsmart-orderer/config/key.pem
-
