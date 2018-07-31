@@ -41,7 +41,7 @@ docker run -i -t -P bftsmart/fabric-tools
 ```
 You have now the whole network booted up, using the SampleOrg organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
 
-As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. In addition, you will also need to use the `configtxgen` tool provided with the image if you decide to generate a new genesis block for the system channel.
+As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
 
 3. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it.
 
