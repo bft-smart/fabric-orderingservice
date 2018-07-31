@@ -97,13 +97,13 @@ Query Result: 90
 
 ## Distributed deployment
 
-You can configure the ordering nodes, frontends, peers and clients to operate in a true distributed setting with the scripts contained in the `./docker_images/` folder. The idea is to execute the `prepare_<TYPE>_defaults.sh` scripts to obtain the default configuration files for each type of principal (where `<TYPE>` is either `orderingnode`,`frontend`, `peer`, or `cli`). This will create a new folder named `./<TYPE>_material` where you can edit the configuration files before copying them into a container. Once the configuration files are ready, they can be copied into their respective containers using the `create_<TYPE>_container.sh` scripts. Not all scripts need to be invoked at all hosts (for instance, `prepare_peer_defaults.sh` and `create_peer_container.sh` only need to be executed at hosts executing peers).
+You can configure the ordering nodes, frontends, peers and clients to operate in a true distributed setting with the scripts contained in the `./docker_images/` folder. The idea is to execute the `prepare_<TYPE>_defaults.sh` scripts to obtain the default configuration files for each type of principal (where `<TYPE>` is either `orderingnode`,`frontend`, `peer`, or `cli`). This will create a new folder named `./<TYPE>_material` where you can edit the configuration files before copying them into containers. Once the configuration files are ready, they can be copied into their respective containers using the `create_<TYPE>_container.sh` scripts. Bear in mind that not all scripts need to be invoked at all hosts (for instance, `prepare_peer_defaults.sh` and `create_peer_container.sh` only need to be executed at hosts executing peers).
 
 If you wish to re-create the "`SampleOrg`" network from the previous section in a distributed scenario:
 
-1. Login to each host machine where you with to install the network components and download this repository using `git clone` or any other method of your preference. Execute the `prepare_<TYPE>_defaults.sh` at each hostname from within the `./docker_images` folder
+1. Login to each host machine that will comprise the network and download this repository using `git clone` or any other method of your preference. Execute the respective `prepare_<TYPE>_defaults.sh` scripts from within the `./docker_images` folder
 
-2. In the machines that should run the ordering nodes and the frontend, edit the `hosts.config` file with the IDs, IP addresses, and ports of each host running an ordering node. This file must be the same across all ordering nodes, and should look something like this:
+2. In the machines that should run ordering nodes and the frontend, edit the `hosts.config` file with the IDs, IP addresses, and ports of each host running an ordering node. This file must be the same across all ordering nodes, and should look something like this:
 
 ```
 #server id, address and port (the ids from 0 to n-1 are the service replicas) 
@@ -118,9 +118,9 @@ The last line in the file represents the ID for a trust BFT-SMaRt client that wi
 
 3. In the machine running the peer, make sure that docker can be correctly accessed from inside the container, by checking the `vm->endpoint` parameter from `core.yaml`. If the peer is supposed to access docker using UNIX sockets, make sure the host machine is creating the socket file at `/var/run/docker.sock` folder and that the value of the parameter is set to `unix:///var/run/docker.sock`. This is because it is in that folder that `create_peer_container.sh` will attempt to mount a volume containing the socket file.
 
-4. In the machine running the client, make sure to set `peer->address` from `core.yaml` to the correct endpoint. In the case of this "`SampleOrg`" network, the entry point corresponds to the IP address of the machine executing the peer at port `7051`. If the machine's IP address is `192.168.1.6`, then the value of the parameter should be `192.168.1.6:7051`. Alternatively, you can leave `core.yaml` unchanged and pass the endpoint later, when invoking `create_cli_container.sh`.
+4. In the machine running the client, make sure to set `peer->address` from `core.yaml` to the correct endpoint. In the case of this "`SampleOrg`" network, the entrypoint corresponds to the IP address of the machine executing the peer at port `7051`. If the machine's IP address is `192.168.1.6`, then the value of the parameter should be `192.168.1.6:7051`. Alternatively, you can leave `core.yaml` unchanged and pass the endpoint later, when invoking `create_cli_container.sh`.
 
-5. Once you are done configuring the files, execute the `create_<TYPE>_container.sh` script at each hostname. You will need to supply a name for the container as a parameter. Each script will output the following:
+5. Once you are done configuring the files, execute the `create_<TYPE>_container.sh` script at each host. You will need to supply a name for the container as a parameter. Each script will output the following:
 
 ```
 Container ID for <container name> is <container id>
@@ -128,21 +128,21 @@ Launch the <TYPE> by typing 'docker start -a <container name>'
 Stop the tools by typing 'docker stop <container name>'
 ```
 
-6. At this point you can launch the containers with the commands indicated by the output of the scripts. But before you are able to create channels, there is one extra step that needs to be performed in the case of "`SampleOrg`". As previously said, the images already have the genesis block for the system channel created. Since the configuration contained within that block was prepared for a local enviroment, it contains an incorrect address for the frontend at this point. Nonetheless, the CLI image we provide contains a script to update the list of frontends. Assuming the IP address for the frontend is `192.168.1.5`, launch the container and execute the following commands:
+6. At this point you can launch the containers with the commands indicated by the output of the scripts. However, before you are able to create channels, there is one extra step that needs to be performed in the case of "`SampleOrg`". As previously said, the images already have the genesis block for the system channel created. Since the configuration contained within that block was prepared for a local enviroment, it contains an incorrect address for the frontend at this point (it is set to `172.17.0.6:7050`, the expected docker address for the local deployment). Nonetheless, the CLI image we provide contains a script to update the list of frontends. Assuming the entrypoint for the frontend is `192.168.1.5:7050`, launch the container and execute the following commands:
 
 ```
 peer channel fetch config genesisblock -c bftchannel -o 192.168.1.5:7050
 echo "[\"192.168.1.5:7050\"]" > addresses.json
 update_frontend_entrypoint.sh genesisblock addresses.json update.tx
 peer channel signconfigtx -f update.tx 
-peer channel update -o 172.17.0.6:7050 -c channel47 -f update.tx
+peer channel update -o 192.168.1.5:7050 -c bftchannel -f update.tx
 ```
 
 From this point on, you should be able to create new channels and invoke the chaincode as in the previous section.
 
 ## Compiling
 
-Make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
+If you wish to compile ths code, make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
 
 ```
 cd $GOPATH/src/github.com/hyperledger/fabric/
