@@ -142,7 +142,7 @@ From this point on, you should be able to create new channels and invoke the cha
 
 ## Compiling
 
-If you wish to compile ths code, make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
+If you wish to compile this code, make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
 
 ```
 cd $GOPATH/src/github.com/hyperledger/fabric/
