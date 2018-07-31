@@ -2,22 +2,6 @@
 
 function main () {
 
-	if [ $# -eq 0 ]; then
-
-		echo "Usage: $0 <container name>"
-		exit 1
-	fi
-
-	id=$(docker ps -aqf "name=$1")
-
-	if [ ! -z "$id" ]; then
-
-		echo "Container name already exists"
-		exit 1
-	fi
-
-	my_contianer_name=$1
-
 	docker pull hyperledger/fabric-peer:x86_64-1.1.1
 
 	docker create --name="peer-temp" "hyperledger/fabric-peer:x86_64-1.1.1" > /dev/null
@@ -46,39 +30,10 @@ function main () {
 
 	docker rm -v $id > /dev/null
 
-	eval $(parse_yaml ./peer_material/fabric/core.yaml "core_")
-
-	if [ ! -z "$core_peer_chaincodeAddress" ]; then
-
-		port="$core_peer_chaincodeAddress"
-
-	elif [ ! -z "$core_peer_chaincodeListenAddress" ]; then
-
-		port="$core_peer_chaincodeListenAddress"
-
-	else
-
-		port="$core_peer_listenAddress"
-		
-	fi
-
-	port=$(awk '{split($0, a, ":"); print a[2]}' <<< $port)
-
-	#echo "Docker endpoint: $core_vm_endpoint"
-	#echo "Port to listen on: $port"
-
-
-	docker create -i -t -p $port:$port --name=$my_contianer_name -v /var/run/:/var/run/ "hyperledger/fabric-peer:x86_64-1.1.1" > /dev/null
-	id=$(docker ps -aqf "name=$my_contianer_name")
-
-	docker cp ./peer_material/fabric $id:/etc/hyperledger/fabric/
-
 	echo ""
-	echo "Container ID for $my_contianer_name is $id"
-	echo "Launch the peer by typing 'docker start -a $my_contianer_name'"
-	echo "Stop the peer by typing 'docker stop $my_contianer_name'"
+	echo "Default configuration available at '$PWD/peer_material/'"
+	echo "Generate containers with 'create_peer_container.sh <container name>'"
 	echo ""
-
 }
 
 parse_yaml() {

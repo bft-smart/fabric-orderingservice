@@ -1,10 +1,8 @@
-#!/bin/bash
-
-function main () {
+function main() {
 
 	re='^[0-9]+$'
 
-	if [ $# -eq 0 ] || [[ ! $2 =~ $re ]]; then
+	if [ -z $2 ] || [[ ! $2 =~ $re ]]; then
 
 		echo "Usage: $0 <container name> <replica ID>"
 		exit 1
@@ -18,49 +16,10 @@ function main () {
 		exit 1
 	fi
 
-	#if [[ "$(docker images -q bftsmart/fabric-orderingnode 2> /dev/null)" == "" ]]; then
-
-	#	echo "bftsmart/fabric-orderingnode missing, either pull it from repository or compile it"
-	#	exit 1
-		
-	#fi
-
 	my_contianer_name=$1
 	my_node_id=$2
 
 	docker pull bftsmart/fabric-orderingnode
-
-	docker create --name="os-temp" "bftsmart/fabric-orderingnode" > /dev/null
-	id=$(docker ps -aqf "name=os-temp")
-
-	if [ ! -d ./orderingnode_material ]; then
-	    mkdir ./orderingnode_material
-	fi
-
-	if [ ! -f ./orderingnode_material/hosts.config ]; then
-		cp ../config/hosts.config ./orderingnode_material
-		nano ./orderingnode_material/hosts.config
-	fi
-
-
-	if [ ! -f ./orderingnode_material/system.config ]; then
-		cp ../config/system.config ./orderingnode_material
-		nano ./orderingnode_material/system.config
-	fi
-
-	if [ ! -f ./orderingnode_material/genesisblock ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/genesisblock ./orderingnode_material
-	fi
-
-	if [ ! -f ./orderingnode_material/cert.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/cert.pem ./orderingnode_material
-	fi
-
-	if [ ! -f ./orderingnode_material/key.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/key.pem ./orderingnode_material
-	fi
-
-	docker rm -v $id > /dev/null
 
 	my_port=-1
 	
@@ -87,7 +46,9 @@ function main () {
 
 	if [ $my_port -eq -1 ]; then
 
+		echo ""
 		echo "Unable to find corresponding port to $my_node_id in hosts.config"
+		echo ""
 		exit 1
 
 	fi
@@ -110,6 +71,7 @@ function main () {
 	echo "Launch the ordering node by typing 'docker start -a $my_contianer_name'"
 	echo "Stop the ordering node by typing 'docker stop $my_contianer_name'"
 	echo ""
+
 }
 
-main "$@"
+main $@
