@@ -114,7 +114,7 @@ If you wish to re-create the "`SampleOrg`" network from the previous section in 
 7001 192.168.1.100 11100
 ```
 
-The last line in the file represents the ID for a trust BFT-SMaRt client that will be discussed in a later section.
+The last line in the file represents the ID for the trusted BFT-SMaRt client that issues reconfigurations to the set of ordering nodes (discussed in a later section).
 
 3. In the machine running the peer, make sure that docker can be correctly accessed from inside the container, by checking the `vm->endpoint` parameter from `core.yaml`. If the peer is supposed to access docker using UNIX sockets, make sure the host machine is creating the socket file at `/var/run/docker.sock` folder and that the value of the parameter is set to `unix:///var/run/docker.sock`. This is because it is in that folder that `create_peer_container.sh` will attempt to mount a volume containing the socket file.
 
