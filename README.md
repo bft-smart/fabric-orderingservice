@@ -127,7 +127,7 @@ Container ID for <container name> is <container id>
 Launch the <TYPE> by typing 'docker start -a <container name>'
 Stop the <TYPE> by typing 'docker stop <container name>'
 ```
-In the case of the frontend's container, make also sure that the ID that you pass as an argument in the `create_frontend_container.sh` script is `1000`.
+Make sure to use the same IDs of 0 to 3 for the ordering nodes when creating their containers with `create_orderingnode_container.sh`. In the case of the frontend's container, make also sure it's ID is `1000` when running `create_frontend_container.sh`. You should also start the containers in the same order as in the local enviroment.
 
 6. At this point you can launch the containers with the commands indicated by the output of the scripts. However, before you are able to create channels, there is one extra step that needs to be performed in the case of "`SampleOrg`". As previously said, the images already have the genesis block for the system channel created. Since the configuration contained within that block was prepared for a local enviroment, it contains an incorrect address for the frontend at this point (it is set to `172.17.0.6:7050`, the expected docker address for the local deployment). Nonetheless, the CLI image we provide contains a script to update the list of frontends. Assuming the entrypoint for the frontend is `192.168.1.5:7050`, launch the container and execute the following commands:
 
