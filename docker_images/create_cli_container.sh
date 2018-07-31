@@ -32,7 +32,7 @@ function main () {
 
 	echo ""
 	echo "Container ID for $my_contianer_name is $id"
-	echo "Launch the tools by typing 'docker start -a -i $my_contianer_name'"
+	echo "Launch the cli by typing 'docker start -a -i $my_contianer_name'"
 	echo "Stop the tools by typing 'docker stop $my_contianer_name'"
 	echo ""
 

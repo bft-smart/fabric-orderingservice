@@ -26,7 +26,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can quickly launch a local Fabric network comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
+You can quickly launch a local Fabric network, comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
 
 1. Make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, download the images and create their respective containers in the following order (each one from a different terminal):
 
@@ -39,7 +39,7 @@ docker run -i -t -P bftsmart/fabric-frontend
 docker run -i -t -P -v /var/run/:/var/run/ hyperledger/fabric-peer:x86_64-1.1.1
 docker run -i -t -P bftsmart/fabric-tools
 ```
-You have now the whole network booted up, using the SampleOrg organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
+You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
 
 As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
 
@@ -94,6 +94,51 @@ peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}
 2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 002 Using default vscc
 Query Result: 90
 ```
+
+## Distributed deployment
+
+You can configure the ordering nodes, frontends, peers and clients to operate in a true distributed setting with the scripts contained in the `./docker_images/` folder. The idea is to execute the `prepare_<TYPE>_defaults.sh` scripts to obtain the default configuration files for each type of principal (where `<TYPE>` is either `orderingnode`,`frontend`, `peer`, or `cli`). This will create a new folder named `./<TYPE>_material` where you can edit the configuration files before copying them into a container. Once the configuration files are ready, they can be copied into their respective containers using the `create_<TYPE>_container.sh` scripts. Not all scripts need to be invoked at all hosts (for instance, `prepare_peer_defaults.sh` and `create_peer_container.sh` only need to be executed at hosts executing peers).
+
+If you wish to re-create the "`SampleOrg`" network from the previous section in a distributed scenario:
+
+1. Login to each host machine where you with to install the network components and download this repository using `git clone` or any other method of your preference. Execute the `prepare_<TYPE>_defaults.sh` at each hostname from within the `./docker_images` folder
+
+2. In the machines that should run the ordering nodes and the frontend, edit the `hosts.config` file with the IDs, IP addresses, and ports of each host running an ordering node. This file must be the same across all ordering nodes, and should look something like this:
+
+```
+#server id, address and port (the ids from 0 to n-1 are the service replicas) 
+0 192.168.1.1 11000
+1 192.168.1.2 11000
+2 192.168.1.3 11000
+3 192.168.1.4 11000
+7001 192.168.1.100 11100
+```
+
+The last line in the file represents the ID for a trust BFT-SMaRt client that will be discussed in a later section.
+
+3. In the machine running the peer, make sure that docker can be correctly accessed from inside the container, by checking the `vm->endpoint` parameter from `core.yaml`. If the peer is supposed to access docker using UNIX sockets, make sure the host machine is creating the socket file at `/var/run/docker.sock` folder and that the value of the parameter is set to `unix:///var/run/docker.sock`. This is because it is in that folder that `create_peer_container.sh` will attempt to mount a volume containing the socket file.
+
+4. In the machine running the client, make sure to set `peer->address` from `core.yaml` to the correct endpoint. In the case of this "`SampleOrg`" network, the entry point corresponds to the IP address of the machine executing the peer at port `7051`. If the machine's IP address is `192.168.1.6`, then the value of the parameter should be `192.168.1.6:7051`. Alternatively, you can leave `core.yaml` unchanged and pass the endpoint later, when invoking `create_cli_container.sh`.
+
+5. Once you are done configuring the files, execute the `create_<TYPE>_container.sh` script at each hostname. You will need to supply a name for the container as a parameter. Each script will output the following:
+
+```
+Container ID for <container name> is <container id>
+Launch the <TYPE> by typing 'docker start -a <container name>'
+Stop the tools by typing 'docker stop <container name>'
+```
+
+6. At this point you can launch the containers with the commands indicated by the output of the scripts. But before you are able to create channels, there is one extra step that needs to be performed in the case of "`SampleOrg`". As previously said, the images already have the genesis block for the system channel created. Since the configuration contained within that block was prepared for a local enviroment, it contains an incorrect address for the frontend at this point. Nonetheless, the CLI image we provide contains a script to update the list of frontends. Assuming the IP address for the frontend is `192.168.1.5`, launch the container and execute the following commands:
+
+```
+peer channel fetch config genesisblock -c bftchannel -o 192.168.1.5:7050
+echo "[\"192.168.1.5:7050\"]" > addresses.json
+update_frontend_entrypoint.sh genesisblock addresses.json update.tx
+peer channel signconfigtx -f update.tx 
+peer channel update -o 172.17.0.6:7050 -c channel47 -f update.tx
+```
+
+From this point on, you should be able to create new channels and invoke the chaincode as in the previous section.
 
 ## Compiling
 
