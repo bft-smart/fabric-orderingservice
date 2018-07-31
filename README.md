@@ -28,7 +28,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 You can quickly launch a local Fabric network comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
 
-1. Make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, download tge images and create their respective containers in the following order (each one from a different terminal):
+1. Make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, download the images and create their respective containers in the following order (each one from a different terminal):
 
 ```
 docker run -i -t -P bftsmart/fabric-orderingnode 0
