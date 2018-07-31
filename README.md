@@ -26,7 +26,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can launch Fabric locally with this ordering service comprised by a single peer, one frontend and 4 ordering nodes by following the steps described bellow.
+You can quickly launch a local Fabric network comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
 
 1. Download the following docker images:
 
@@ -49,6 +49,8 @@ docker run -i -t -P bftsmart/fabric-frontend
 docker run -i -t -P -v /var/run/:/var/run/ hyperledger/fabric-peer:x86_64-1.1.1
 docker run -i -t -P bftsmart/fabric-tools
 ```
+You have now the whole network booted up, using the SampleOrg organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
+
 Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it.
 
 3. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
