@@ -43,7 +43,7 @@ You have now the whole network booted up, using the SampleOrg organization provi
 
 As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
 
-3. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
+2. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
 
 ```
 configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx channel.tx -channelID channel47
@@ -51,7 +51,7 @@ configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate anchor.tx -
 ```
 Notice we are not generating the genesis block for the system channel because the images already come with one generated. The name of the system channel is "bftchannel".
 
-4. If you were not executing any container before following this instructions, the frontend should have been assigned the address "172.17.0.6". Send the transactions to the orderng service by providing the frontend's entrypoint as follows:
+3. If you were not executing any container before following this instructions, the frontend should have been assigned the address "172.17.0.6". Send the transactions to the orderng service by providing the frontend's entrypoint as follows:
 
 ```
 peer channel create -o 172.17.0.6:7050 -c channel47 -f channel.tx 
@@ -64,14 +64,14 @@ You should now have a file named "channel47.block" in your current directory of 
 peer channel join -b channel47.block
 ```
 
-5. Install and instantiate the example chaincode included in the container as follows:
+4. Install and instantiate the example chaincode included in the container as follows:
 
 ```
 peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
 peer chaincode instantiate -o 172.17.0.6:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
 ```
 
-6. You can now perform queries and invocations to the chaincode:
+5. You can now perform queries and invocations to the chaincode:
 
 ```
 peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
