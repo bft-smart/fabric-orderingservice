@@ -28,17 +28,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 You can quickly launch a local Fabric network comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
 
-1. Download the following docker images:
-
-```
-docker pull bftsmart/fabric-orderingnode
-docker pull bftsmart/fabric-frontend
-docker pull bftsmart/fabric-tools
-docker pull hyperledger/fabric-peer:x86_64-1.1.1
-```
-As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration.
-
-2. For this step, you should make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, start new containers for the downloaded images in the following order (each one from a different terminal):
+1. Make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, download tge images and create their respective containers in the following order (each one from a different terminal):
 
 ```
 docker run -i -t -P bftsmart/fabric-orderingnode 0
@@ -51,9 +41,11 @@ docker run -i -t -P bftsmart/fabric-tools
 ```
 You have now the whole network booted up, using the SampleOrg organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
 
-Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it.
+As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. In addition, you will also need to use the `configtxgen` tool provided with the image if you decide to generate a new genesis block for the system channel.
 
-3. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
+3. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it.
+
+Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
 
 ```
 configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx channel.tx -channelID channel47
