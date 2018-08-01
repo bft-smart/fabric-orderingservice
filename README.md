@@ -41,7 +41,7 @@ docker run -i -t --rm --network=bft_network --name=bft.node.0 bftsmart/fabric-or
 docker run -i -t --rm --network=bft_network --name=bft.node.1 bftsmart/fabric-orderingnode 1
 docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-orderingnode 2
 docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode 3
-docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend
+docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend 1000
 ```
 Ordering nodes need to be started from the one with the lowest ID to the one with the highest. After all ordering nodes are started, the frontends can also start.
 
