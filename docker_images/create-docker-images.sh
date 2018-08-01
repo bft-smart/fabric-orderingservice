@@ -82,6 +82,7 @@ function main() {
 	docker cp $id:/go/src/github.com/hyperledger/fabric/examples/chaincode ./temp
 	docker cp $id:/usr/lib/libunixdomainsocket-linux-i386.so ./temp
 	docker cp $id:/usr/lib/libunixdomainsocket-linux-x86_64.so ./temp
+
 	docker rm -v $id
 
 	docker-compose build common orderingnode frontend
@@ -96,55 +97,6 @@ function main() {
 		docker rmi bftsmart/fabric-common
 	fi
 }
-
-#function create_hosts_config () {
-
-#cat > ./temp/config/hosts.config << 'EOF'
-#0 172.17.0.2 11000
-#1 172.17.0.3 11010
-#2 172.17.0.4 11020
-#3 172.17.0.5 11030
-#7001 127.0.0.1 11100
-#EOF
-
-#}
-
-#function create_node_config () {
-
-#cat > ./temp/config/node.config << 'EOF'
-#Path to the genesis block for the system channel
-#GENESIS=/etc/bftsmart-orderer/config/genesisblock
-
-##The ID of the membership service provider (MSP)
-#MSPID=DEFAULT
-
-##Certificate of the node, compliant to Fabric's MSP guidelines
-#CERTIFICATE=/etc/bftsmart-orderer/config/cert.pem
-
-##Private key of the node, compliant to Fabric's MSP guidelines
-#PRIVKEY=/etc/bftsmart-orderer/config/key.pem
-
-##Number of block generation threads in the pool
-#PARELLELISM=10
-
-##Maximum number of blocks to submit to each signer/sending thread
-#BLOCKS_PER_THREAD=10000
-
-##IDs of the frontends present in the system, separate by commas
-#RECEIVERS=1000,2000
-
-##Enable/disable envelope validation. Configuration envelopes are always verified regardless of this parameter
-#ENV_VALIDATION=true
-
-##Enable/disable second block signature. Useful for benchmarking, but it must be enabled on production deployments, so that it abides to Fabric's implementation
-#BOTH_SIGS=true
-
-##The acceptable difference between the state machine's time and the client's time. Only used if envelope validation is active
-##or in the case of a reconfiguration envelope
-#TIME_WINDOW=15m
-#EOF
-
-#}
 
 function create_update_frontend_entrypoint_script() {
 
@@ -492,7 +444,7 @@ Orderer: &OrdererDefaults
     # participation in ordering. 
     # NOTE: In the solo case, this should be a one-item list.
     Addresses:
-        - 172.17.0.6:7050
+        - bft.frontend.1000:7050
 
     # Batch Timeout: The amount of time to wait before creating a batch.
     BatchTimeout: 2s
@@ -1010,7 +962,7 @@ peer:
     # in the same organization. For peers in other organization, see
     # gossip.externalEndpoint for more info.
     # When used as CLI config, this means the peer's endpoint to interact with
-    address: 172.17.0.7:7051
+    address: bft.peer.0:7051
 
     # Whether the Peer should programmatically determine its address
     # This case is useful for docker containers.
