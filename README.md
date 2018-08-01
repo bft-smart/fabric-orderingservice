@@ -26,24 +26,36 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can quickly launch a local Fabric network, comprised of 4 ordering nodes, a single frontend, and one peer by following the steps described bellow.
+You can quickly launch a local Fabric network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow.
 
-1. Make sure you are not executing any container. This is because the images are already configured for containers allocated to the addresses 172.17.0.2-172.17.0.8. After stopping any container you may have running, download the images and create their respective containers in the following order (each one from a different terminal):
+1. Create a new docker network named `bft_network`:
 
 ```
-docker run -i -t -P bftsmart/fabric-orderingnode 0
-docker run -i -t -P bftsmart/fabric-orderingnode 1
-docker run -i -t -P bftsmart/fabric-orderingnode 2
-docker run -i -t -P bftsmart/fabric-orderingnode 3
-docker run -i -t -P bftsmart/fabric-frontend
-docker run -i -t -P -v /var/run/:/var/run/ hyperledger/fabric-peer:x86_64-1.1.1
-docker run -i -t -P bftsmart/fabric-tools
+docker network create bft_network
 ```
-You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the Fabric codebase for both clients, peers, and the ordering service.
 
-As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official CLI image, but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
+2. Download images and create containers to 4 ordering nodes with 1 frontend in the following order (each one from a different terminal):
 
-2. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
+```
+docker run -i -t --rm --network=bft_network --name=bft.node.0 bftsmart/fabric-orderingnode 0
+docker run -i -t --rm --network=bft_network --name=bft.node.1 bftsmart/fabric-orderingnode 1
+docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-orderingnode 2
+docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode 3
+docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend
+```
+Ordering nodes need to be started from the one with the lowest ID to the one with the highest. After all ordering nodes are started, the frontends can also start.
+
+3. Start the peer and a client, also at different terminals:
+
+```
+docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1
+docker run -i -t --rm --network=bft_network bftsmart/fabric-tools
+```
+You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the Fabric source code for both clients, peers, and the ordering service.
+
+As you may have noticed, you can use the ordering service with the official peer image provided by the Hyperledger project. You can also use it with the official client image, but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
+
+4. Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
 
 ```
 configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx channel.tx -channelID channel47
@@ -51,12 +63,13 @@ configtxgen -profile SampleSingleMSPChannel -outputAnchorPeersUpdate anchor.tx -
 ```
 Notice we are not generating the genesis block for the system channel because the images already come with one generated. The name of the system channel is "bftchannel".
 
-3. If you were not executing any container before following this instructions, the frontend should have been assigned the address "172.17.0.6". Send the transactions to the orderng service by providing the frontend's entrypoint as follows:
+5. Send the transactions to the orderng service by contacting the frontend:
 
 ```
-peer channel create -o 172.17.0.6:7050 -c channel47 -f channel.tx 
-peer channel update -o 172.17.0.6:7050 -c channel47 -f anchor.tx
+peer channel create -o bft.frontend.1000:7050 -c channel47 -f channel.tx 
+peer channel update -o bft.frontend.1000:7050 -c channel47 -f anchor.tx
 ```
+Bear in mind that you should only supply an entrypoint for frontends, not ordering nodes. Ordering nodes only receive transactions from the frontends and send the assembled blocks back to them.
 
 You should now have a file named "channel47.block" in your current directory of the container. You can use it to make the peer join the channel as follows:
 
@@ -64,14 +77,14 @@ You should now have a file named "channel47.block" in your current directory of 
 peer channel join -b channel47.block
 ```
 
-4. Install and instantiate the example chaincode included in the container as follows:
+6. Install and instantiate the example chaincode included in the container:
 
 ```
 peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
-peer chaincode instantiate -o 172.17.0.6:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
+peer chaincode instantiate -o bft.frontend.1000:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
 ```
 
-5. You can now perform queries and invocations to the chaincode:
+7. You can now perform queries and invocations to the chaincode:
 
 ```
 peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
