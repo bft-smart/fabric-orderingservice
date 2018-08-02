@@ -52,11 +52,7 @@ You can now create an overlay network by using the following command also at the
 docker network create -d overlay --attachable bft-network
 ```
 
-Finally, at every other host other than the manager, execute the command bellow:
-
-```
-docker swarm join --token SWMTKN-1-4kstilp413po8qqfxod33ig1ydxhfv4rwu3zhh7pf28wlt6h3e-88cf7j0aiuv1xzuusl7ipdt0f 192.168.2.23:2377
-```
+Finally, at every other host other than the manager, execute the `docker swarm join` command with the parameters that were given in the output of `docker swarm init`:
 
 You should now have the network available and ready for the next steps.
 
