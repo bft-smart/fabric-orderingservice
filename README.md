@@ -73,9 +73,9 @@ Ordering nodes need to be started from the one with the lowest ID to the one wit
 
 3. Start the peer. At this juncture, we can use the official peer image provided by the Hyperledger project. Moreover, we assume that the docker daemon has its UNIX socket available at `/var/run/docker.socket`, so we will mount a volume in the container at `/var/run/` to give it access to the daemon. This is necessary because peers will perform chaincode execution by creating their own containers to execute their instantiated chaincodes.
 
-   * If you have created a local network with the bridge driver, this command suffices: `docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1`
+   * If you have created a network with the bridge driver, this command suffices: `docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1`
 
-   * If instead you created a distributed network, we first need to deal with an idiosyncrasy that manisfests when using the swarm driver with a peer container. If we used the command above, the peer would be prone to block/timeout its execution when eventually a client tries to instantiate some chaincode. The way we found to avoid this issue, is to first connect the peer's container with the bridge driver and next with the swarm driver:
+   * If instead you created a swarm network, we first need to deal with an idiosyncrasy that manisfests when using the swarm driver with a peer container. If we used the command above, the peer would be prone to block/timeout its execution when eventually a client tries to instantiate some chaincode. The way we found to avoid this issue, is to first connect the peer's container with the bridge driver and next with the swarm driver:
 
 ```
 docker create -i -t --rm --network=bridge -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1
