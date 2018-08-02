@@ -103,7 +103,7 @@ docker run -i -t --rm --network=bft_network bftsmart/fabric-tools
 
 You can also use the official client image (`hyperledger/fabric-tools:x86_64-1.1.1`), but the one provided by us is already configured for this demontration. More importantly, you will also need to use the `configtxgen` tool provided with this image if you decide to setup another network different than the one configured in our images.
 
-You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the HLF source code for both clients, peers, and the ordering service.
+You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the HLF source code for both the client, the peer, and the ordering service.
 
 ##### 5. Create the artifacts.
 
