@@ -3,8 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package bft;
+package bft.util;
 
+import bft.util.BFTCommon;
 import bftsmart.reconfiguration.views.View;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;

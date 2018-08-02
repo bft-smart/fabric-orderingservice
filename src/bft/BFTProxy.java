@@ -5,6 +5,8 @@
  */
 package bft;
 
+import bft.util.ProxyReplyListener;
+import bft.util.BFTCommon;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;

@@ -5,6 +5,9 @@
  */
 package bft;
 
+import bft.util.BFTCommon;
+import bft.util.MSPManager;
+import bft.util.BlockCutter;
 import bftsmart.reconfiguration.util.TOMConfiguration;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
@@ -98,13 +101,11 @@ public class BFTNode extends DefaultRecoverable {
     private BlockWorkerThread currentSST = null;
 
     //measurements
-    private final int interval = 10000;
+    private int interval;
     private long envelopeMeasurementStartTime = -1;
     private long blockMeasurementStartTime = -1;
-    private long sigsMeasurementStartTime = -1;
     private int countEnvelopes = 0;
     private int countBlocks = 0;
-    private int countSigs = 0;
     
     //used to avoid the block worker threads from accessing a null pointer in 'replica'
     private final Lock replicaLock;
@@ -216,6 +217,7 @@ public class BFTNode extends DefaultRecoverable {
         blocksPerThread = Integer.parseInt(configs.get("BLOCKS_PER_THREAD"));
         bothSigs = Boolean.parseBoolean(configs.get("BOTH_SIGS"));
         envValidation = Boolean.parseBoolean(configs.get("ENV_VALIDATION"));
+        interval = Integer.parseInt(configs.get("THROUGHPUT_INTERVAL"));
         
         FileInputStream input = new FileInputStream(new File(configs.get("GENESIS")));
         sysGenesis = Common.Block.parseFrom(IOUtils.toByteArray(input));
@@ -675,11 +677,6 @@ public class BFTNode extends DefaultRecoverable {
         try {
             
             block = BFTCommon.createNextBlock(lastBlockHeaders.get(channel).getNumber() + 1, crypto.hash(BFTCommon.encodeBlockHeaderASN1(lastBlockHeaders.get(channel))), batch);
-            
-        
-            if (blockMeasurementStartTime == -1) {
-                blockMeasurementStartTime = System.currentTimeMillis();
-            }
                         
             if (isConfig) {
                 
@@ -752,17 +749,6 @@ public class BFTNode extends DefaultRecoverable {
                     logger.info(msg);
                     throw new BFTCommon.BFTException(msg);
                 }
-            }
-            
-            //Throughput measurements
-            countBlocks++;
-
-            if (countBlocks % interval == 0) {
-
-                float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - blockMeasurementStartTime));
-                logger.info("Throughput = " + tp + " blocks/sec");
-                blockMeasurementStartTime = System.currentTimeMillis();
-
             }
             
             //optimization to parellise signatures and sending
@@ -864,8 +850,8 @@ public class BFTNode extends DefaultRecoverable {
                             break;
                         }
 
-                        if (sigsMeasurementStartTime == -1) {
-                            sigsMeasurementStartTime = System.currentTimeMillis();
+                        if (blockMeasurementStartTime == -1) {
+                            blockMeasurementStartTime = System.currentTimeMillis();
                         }
 
                         //validate envelopes in block and discard invalid ones (if validation is enabled)
@@ -912,13 +898,13 @@ public class BFTNode extends DefaultRecoverable {
                             configSig = Common.Metadata.newBuilder().setValue(ByteString.EMPTY).addSignatures(dummySig).build();
                             
                         }
-                        countSigs++;
+                        countBlocks++;
 
-                        if (countSigs % interval == 0) {
+                        if (countBlocks % interval == 0) {
 
-                            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - sigsMeasurementStartTime));
-                            logger.info("Throughput = " + tp + " sigs/sec");
-                            sigsMeasurementStartTime = System.currentTimeMillis();
+                            float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - blockMeasurementStartTime));
+                            logger.info("Throughput = " + tp + " blocks/sec");
+                            blockMeasurementStartTime = System.currentTimeMillis();
 
                         }
 

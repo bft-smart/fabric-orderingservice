@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package bft;
+package bft.util;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

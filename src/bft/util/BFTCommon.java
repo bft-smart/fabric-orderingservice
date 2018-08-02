@@ -3,8 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package bft;
+package bft.util;
 
+import bft.util.MSPManager;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.util.TOMUtil;
 import com.google.protobuf.ByteString;
@@ -91,7 +92,7 @@ public class BFTCommon {
         
     public static class BFTException extends Exception {
         
-        BFTException(String msg) {
+        public BFTException(String msg) {
             
             super(msg);
         }
@@ -100,13 +101,13 @@ public class BFTCommon {
         
     public class BFTTuple {
 
-        Common.Block block = null;
-        MessageContext msgContext = null;
-        int sequence = -1;
-        String channelID = null;
-        boolean config = false;
+        public Common.Block block = null;
+        public MessageContext msgContext = null;
+        public int sequence = -1;
+        public String channelID = null;
+        public boolean config = false;
         
-        MSPManager clonedManager = null;
+        public MSPManager clonedManager = null;
         
         private BFTTuple(Common.Block block, MessageContext msgCtx, int sequence, String channelID, boolean config, MSPManager clonedManager) {
 
@@ -122,10 +123,10 @@ public class BFTCommon {
     
     public class RequestTuple {
 
-        String type = null;
-        String channelID = null;
-        byte[] payload = null;
-        byte[] signature = null;
+        public String type = null;
+        public String channelID = null;
+        public byte[] payload = null;
+        public byte[] signature = null;
 
         private RequestTuple(String type, String channelID, byte[] payload, byte[] signature) {
 
@@ -139,10 +140,10 @@ public class BFTCommon {
     
     public class ReplyTuple {
         
-        Common.Block block;
-        Common.Metadata[] metadata;
-        String channel;
-        boolean config;
+        public Common.Block block;
+        public Common.Metadata[] metadata;
+        public String channel;
+        public boolean config;
         
         private ReplyTuple (Common.Block block, Common.Metadata[] metadata, String channel, boolean config) {
             this.block = block;
