@@ -2,7 +2,17 @@
 
 This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around [BFT-SMaRt](https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
 
-## Overview
+### Table of Contents
+
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Overview](#overview)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Pre-requisites](#prerequisites)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Quick Start](#quickstart)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Compiling](#compiling)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Executing the compiled code without docker](#executing)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[State transfer and reconfiguration](#reconfig)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Limitation](#limitations)**</br>
+
+## Overview <a name="overview"/>
 
 This ordering service has a similar architecture to the Kafka-based ordering service already provided by HLF. It is comprised by a set of `3f+1` ordering nodes and an arbitrary number of frontends, as depicted in the figure bellow. 
 
@@ -16,7 +26,7 @@ The ordering nodes are equivalent to the Kafka-cluster with a Zookeeper ensemble
 
 For more information regarding this project, check out the technical report available [here](http://arxiv.org/abs/1709.06921)
 
-## Pre-requisites
+## Pre-requisites <a name="prerequisites"/>
 
 This ordering service was developed and tested under Ubuntu 16.04.2 LTS and HLF v1.1. The docker images provided in Docker Hub are compatible with Docker 1.13.1 and above.
 
@@ -24,7 +34,7 @@ Because this ordering service needs to be integrated into the HLF codebase, it r
 
 Besides the aforementioned dependecies, this service also uses the JUDS library to provide UNIX sockets for communication between the Java and Go components. The codebase already includes the associated jar, but because it uses JNI to access native UNIX sockets interfaces, it is still necessary to download the source code from [here](https://github.com/mcfunley/juds) and go through the installation steps described in the README.
 
-## Quick start
+## Quick start <a name="quickstart"/>
 
 You can quickly launch a HLF network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow. These following instructions - as well as this README in general - assume you have entry-level knowledge of both docker and HLF.
 
@@ -175,7 +185,7 @@ Lastly, you can also create new channels as follows:
 broadcast_config --server bft.frontend.1000:7050 --cmd newChain --chainID <channel ID>
 ```
 
-## Compiling
+## Compiling <a name="compiling"/>
 
 If you wish to compile this code, make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
 
@@ -193,7 +203,7 @@ Make also sure to set the `$FABRIC_CFG_PATH` environment variable to the absolut
 
 To compile the Java code provided by this repository, you can simply type `ant` in its main folder. To compile the images available at Docker Hub, enter the `docker_images` sub-directory and run the `create_docker_images.sh` script (you will need to provide the name for the system channel as an argument).
 
-## Executing the compiled code without docker
+## Executing the compiled code without docker <a name="executing"/>
 
 ### Launching 4 ordering nodes and a single frontend
 
@@ -309,7 +319,7 @@ Any time you need to bootstrap the system from scratch, make sure you delete the
 
 Finally, keep in mind that the Go component needs to be in the same host as the Java component. Nonetheless, you only need to install the JUDS dependencies in the hosts that runs a frontend.
 
-## State transfer and reconfiguration
+## State transfer and reconfiguration <a name="reconfig"/>
 
 Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node with the `startReplica.sh` script. To make that node join the existing group, use the `reconfigure.sh` script as follows:
 
@@ -319,7 +329,7 @@ Each ordering node can be re-started after a crash, as long as the total number 
 
 In order to remove a node from the group, use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the hosts that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the host from which the `reconfigure.sh` script is executed is also given this file.
 
-## Limitations
+## Limitations <a name="limitations"/>
 
 The current codebase is compatible with, and as been tested for Fabic v1.1.1, but not yet with v1.2. Addtionally, and as described above, the current implementation of this ordering service supports state transfer and on-the-fly reconfiguration of the set of ordering nodes. However, this does not extends to the set of frontends yet.
 
