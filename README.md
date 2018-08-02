@@ -54,7 +54,7 @@ docker network create -d overlay --attachable bft-network
 
 Finally, at every other host other than the manager, execute the `docker swarm join` command with the parameters that were given in the output of `docker swarm init`. After that, you should  have the network available and ready for the next steps.
 
-##### 2. Download the ordering service's imagess and create containers.
+##### 2. Download the ordering service's images and create containers.
 
 Execute the commands bellow in the same order (each one from a different terminal):
 
@@ -119,7 +119,7 @@ You should now have a file named "channel47.block" in your current directory of 
 peer channel join -b channel47.block
 ```
 
-##### 7. Install and instantiate chaincode
+##### 7. Install and instantiate chaincode.
 
 This container includes the official examples available at the officiak HLF source code. Install and instantiate the following  example chaincode:
 
@@ -127,7 +127,7 @@ This container includes the official examples available at the officiak HLF sour
 peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
 peer chaincode instantiate -o bft.frontend.1000:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
 ```
-##### 8. Issue invocations and queries
+##### 8. Issue invocations and queries.
 
 You can now perform queries and invocations to the chaincode:
 
@@ -153,7 +153,7 @@ peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}
 Query Result: 90
 ```
 
-##### 9. Generate workload
+##### 9. Generate workload.
 
 Alternitavely, you can instead use special test clients to issue workload into the ordering service. To create a client that receives blocks from channel47:
 
