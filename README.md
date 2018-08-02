@@ -16,7 +16,9 @@ This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric
 
 This ordering service has a similar architecture to the Kafka-based ordering service already provided by HLF. It is comprised by a set of `3f+1` ordering nodes and an arbitrary number of frontends, as depicted in the figure bellow. 
 
-![Architecture](https://github.com/jcs47/hyperledger-bftsmart/blob/master/bft-os.png?raw=true)
+<p align="center">
+<img src="https://github.com/jcs47/hyperledger-bftsmart/blob/master/bft-os.png?raw=true">
+<p>
 
 The ordering nodes are equivalent to the Kafka-cluster with a Zookeeper ensemble, in the sense that they also execute a distributed consensus protocol responsible for establishing a total order on transactions. Furthermore, the frontends are equivalent to the ordering service nodes (OSNs) used by the Kafka-based ordering service, in the sense that they also relay the transactions issued by clients into the the consensus protocol. However, some key differences between this service and the Kafka-based service are:
 
