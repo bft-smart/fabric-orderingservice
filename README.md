@@ -146,6 +146,26 @@ peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}
 Query Result: 90
 ```
 
+Alternitavely, you can instead use special test clients to issue workload into the ordering service. To create a client that receives blocks from channel47:
+
+```
+deliver_stdout --server bft.frontend.1000:7050 --channelID channel47
+```
+  
+To begin introducing workload, start a new container for a second client, and type the following command:
+
+```
+broadcast_msg --server bft.frontend.1000:7050 --channelID channel47 --size <size of each transaction> --messages <number of transactions to send>
+```
+
+Bear in mind that the "transactions" issued by this client are not valid chaincode invocations. They are just random payload meant to generate workload.
+  
+Lastly, you can also create new channels as follows:
+
+```
+broadcast_config --server bft.frontend.1000:7050 --cmd newChain --chainID <channel ID>
+```
+
 ## Compiling
 
 If you wish to compile this code, make sure to switch to the 'release-1.1' branch, both for this repository and for the aforementioned HLF fork. You can compile that fork the same way as the official repository. However, you must make sure to compile it outside of Vagrant, by executing:
