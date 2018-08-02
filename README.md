@@ -26,7 +26,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can quickly launch a Fabric network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow.
+You can quickly launch a HLF network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow. These steps, and the README in general, assume you have entry-level knowledge of both docker and HLF
 
 1) Create a new docker network named `bft_network`.
 
@@ -91,7 +91,7 @@ docker run -i -t --rm --network=bft_network bftsmart/fabric-tools
 
 You can also use it with the official client image (`hyperledger/fabric-tools:x86_64-1.1.1`), but the one provided by us is already configured for this demontration. You will also need to use the `configtxgen` tool provided with the image if you decide to setup another network different than the one configured in the images.
 
-You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the Fabric source code for both clients, peers, and the ordering service.
+You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the HLF source code for both clients, peers, and the ordering service.
 
 5) Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
 
