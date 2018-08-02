@@ -10,7 +10,7 @@ This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric
  &nbsp;&nbsp;&nbsp;&nbsp;**[Compiling](#compiling)**</br>
  &nbsp;&nbsp;&nbsp;&nbsp;**[Executing the compiled code without docker](#executing)**</br>
  &nbsp;&nbsp;&nbsp;&nbsp;**[State transfer and reconfiguration](#reconfig)**</br>
- &nbsp;&nbsp;&nbsp;&nbsp;**[Limitation](#limitations)**</br>
+ &nbsp;&nbsp;&nbsp;&nbsp;**[Limitations](#limitations)**</br>
 
 ## Overview <a name="overview"/>
 
