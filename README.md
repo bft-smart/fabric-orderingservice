@@ -26,7 +26,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start
 
-You can quickly launch a HLF network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow. These steps, and the README in general, assume you have entry-level knowledge of both docker and HLF
+You can quickly launch a HLF network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow. These following instructions - as well as this README in general - assume you have entry-level knowledge of both docker and HLF.
 
 1) Create a new docker network named `bft_network`.
 
