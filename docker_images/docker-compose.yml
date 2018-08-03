@@ -4,7 +4,7 @@ services:
 
   frontend:
 
-    image: bftsmart/fabric-frontend
+    image: bftsmart/fabric-frontend:x86_64-1.1.1
     build:
 
       context: ./
@@ -13,17 +13,9 @@ services:
     depends_on:
       - common
 
-  prepared_frontend:
-
-    image: bftsmart/fabric-prepared_frontend
-    build:
-
-      context: ./
-      dockerfile: Dockerfile-prepared_frontend
-
   orderingnode:
 
-    image: bftsmart/fabric-orderingnode
+    image: bftsmart/fabric-orderingnode:x86_64-1.1.1
     build:
 
       context: ./
@@ -32,17 +24,9 @@ services:
     depends_on:
       - common
 
-  prepared_orderingnode:
-
-    image: bftsmart/fabric-prepared_orderingnode
-    build:
-
-      context: ./
-      dockerfile: Dockerfile-prepared_orderingnode
-
   fabric:
 
-    image: bftsmart/fabric
+    image: bftsmart/fabric:x86_64-1.1.1
     build:
 
       context: ./
@@ -50,7 +34,7 @@ services:
 
   common:
 
-    image: bftsmart/fabric-common
+    image: bftsmart/fabric-common:x86_64-1.1.1
     build:
 
       context: ./
@@ -58,7 +42,7 @@ services:
 
   tools:
 
-    image: bftsmart/fabric-tools
+    image: bftsmart/fabric-tools:x86_64-1.1.1
     build:
 
       context: ./
