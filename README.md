@@ -75,9 +75,14 @@ docker run -i -t --rm --network=bft_network --name=bft.node.0 bftsmart/fabric-or
 docker run -i -t --rm --network=bft_network --name=bft.node.1 bftsmart/fabric-orderingnode:x86_64-1.1.1 1
 docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-orderingnode:x86_64-1.1.1 2
 docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode:x86_64-1.1.1 3
+```
+
+Ordering nodes need to be started from the one with the lowest ID to the one with the highest. Once all ordering nodes have outputed `-- Ready to process operations`, the frontend can also start:
+
+```
 docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend:x86_64-1.1.1
 ```
-Ordering nodes need to be started from the one with the lowest ID to the one with the highest. After all ordering nodes are started, the frontends can also start.
+
 
 ##### 3. Start the peer.
 
@@ -165,9 +170,11 @@ peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}
 Query Result: 90
 ```
 
+Alternatively to typing all these commands manually, you can simply execute `exec_demo.sh` anywhere within the client's container.
+
 ##### 9. Generate workload.
 
-Alternitavely, you can instead use special test clients to issue workload into the ordering service. To create a client that receives blocks from channel47:
+You can also use special test clients to issue workload into the ordering service. To create a client that receives blocks from channel47:
 
 ```
 deliver_stdout --server bft.frontend.1000:7050 --channelID channel47
