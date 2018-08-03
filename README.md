@@ -71,11 +71,11 @@ Finally, at every other host other than the manager, execute the `docker swarm j
 Execute the commands bellow in the same order (each one from a different terminal):
 
 ```
-docker run -i -t --rm --network=bft_network --name=bft.node.0 bftsmart/fabric-orderingnode 0
-docker run -i -t --rm --network=bft_network --name=bft.node.1 bftsmart/fabric-orderingnode 1
-docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-orderingnode 2
-docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode 3
-docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend
+docker run -i -t --rm --network=bft_network --name=bft.node.0 bftsmart/fabric-orderingnode:x86_64-1.1.1 0
+docker run -i -t --rm --network=bft_network --name=bft.node.1 bftsmart/fabric-orderingnode:x86_64-1.1.1 1
+docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-orderingnode:x86_64-1.1.1 2
+docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode:x86_64-1.1.1 3
+docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend:x86_64-1.1.1
 ```
 Ordering nodes need to be started from the one with the lowest ID to the one with the highest. After all ordering nodes are started, the frontends can also start.
 
@@ -98,7 +98,7 @@ docker start -a bft.peer.0
 For the client, we will instead use the image from our own repository:
 
 ```
-docker run -i -t --rm --network=bft_network bftsmart/fabric-tools
+docker run -i -t --rm --network=bft_network bftsmart/fabric-tools:x86_64-1.1.1
 ```
 
 You can also use the official client image (`hyperledger/fabric-tools:x86_64-1.1.1`), but the one provided by us is already configured for this demontration. More importantly, you will also need to use the `configtxgen` tool provided with this image if you decide to setup another network different than the one configured in our images.
