@@ -18,8 +18,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.hyperledger.fabric.protos.common.Common;
 
 
@@ -35,7 +35,7 @@ public class BlockCutter {
     private Map<String, Long> MaxMessageCount;
     private Map<String, Integer> pendingBatchSizeBytes;
     
-    private static Log logger = LogFactory.getLog(BlockCutter.class);;
+    private static Logger logger;
 
     private BlockCutter() { //used for state transfer
                 
@@ -44,6 +44,7 @@ public class BlockCutter {
         PreferredMaxBytes = new TreeMap<>();
         MaxMessageCount = new TreeMap<>();
         
+        logger = LoggerFactory.getLogger(BlockCutter.class);
     }
     
     @Override

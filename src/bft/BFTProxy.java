@@ -16,6 +16,7 @@ import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -32,10 +33,8 @@ import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.hyperledger.fabric.protos.common.Common;
 import org.hyperledger.fabric.protos.common.Configtx;
@@ -62,7 +61,8 @@ public class BFTProxy {
 
     private static ProxyReplyListener sysProxy;
         
-    private static Log logger;
+    private static Logger logger;
+    private static String configDir;
     
     //measurements
     private static final int interval = 10000;
@@ -76,15 +76,21 @@ public class BFTProxy {
     public static void main(String args[]) {
 
         if(args.length < 3) {
-            System.out.println("Use: java BFTNode <proxy id> <pool size> <send port>");
+            System.out.println("Use: java bft.BFTProxy <proxy id> <pool size> <send port>");
             System.exit(-1);
         }    
+        
+        configDir = BFTCommon.getBFTSMaRtConfigDir("FRONTEND_CONFIG_DIR");
+        
+        if (System.getProperty("logback.configurationFile") == null)
+            System.setProperty("logback.configurationFile", configDir + "logback.xml");
                 
-        BFTProxy.logger = LogFactory.getLog(BFTProxy.class);
+        BFTProxy.logger = LoggerFactory.getLogger(BFTProxy.class);
+        
         initID = Integer.parseInt(args[0]);
         nextID = initID + 1;
         
-        sysProxy = new ProxyReplyListener(initID, BFTNode.DEFAULT_CONFIG_FOLDER);
+        sysProxy = new ProxyReplyListener(initID, configDir);
         
         int pool = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);
@@ -248,7 +254,7 @@ public class BFTProxy {
             this.id = id;
             this.recv = recv;
             this.input = new DataInputStream(this.recv.getInputStream());
-            this.out = new AsynchServiceProxy(this.id, BFTNode.DEFAULT_CONFIG_FOLDER);
+            this.out = new AsynchServiceProxy(this.id, configDir);
             
         }
         
@@ -296,7 +302,7 @@ public class BFTProxy {
                 
                 
                 } catch (IOException ex) {
-                    Logger.getLogger(BFTProxy.class.getName()).log(Level.SEVERE, null, ex);
+                    ex.printStackTrace();
                     continue;
                 }
                 

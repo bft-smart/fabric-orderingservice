@@ -5,23 +5,15 @@
  */
 package bft.test;
 
-import bft.BFTNode;
 import bft.util.BFTCommon;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import com.google.protobuf.ByteString;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.hyperledger.fabric.protos.common.Common;
 
 /**
@@ -30,20 +22,26 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class WorkloadClient {
     
+    private static String configDir;
     
     public static void main(String[] args) throws Exception{
 
         if(args.length < 4) {
-            System.out.println("Use: java WorkloadClient <frontend ID> <channel ID> <num clients> <envelope payload size>");
+            System.out.println("Use: java bft.test.WorkloadClient <frontend ID> <channel ID> <num clients> <envelope payload size>");
             System.exit(-1);
         }      
+        
+        configDir = BFTCommon.getBFTSMaRtConfigDir("WORKLOAD_CONFIG_DIR");
+        
+        if (System.getProperty("logback.configurationFile") == null)
+            System.setProperty("logback.configurationFile", configDir + "logback.xml");
         
         int frontendID = Integer.parseInt(args[0]);
         String channelID = args[1];
         int clients = Integer.parseInt(args[2]);
         
         
-        AsynchServiceProxy proxy = new AsynchServiceProxy(frontendID, BFTNode.DEFAULT_CONFIG_FOLDER);
+        AsynchServiceProxy proxy = new AsynchServiceProxy(frontendID, configDir);
         proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 // do nothing
             });
@@ -87,7 +85,7 @@ public class WorkloadClient {
             this.id = id;
             this.channelID = channelID;
             this.env = env;
-            this.proxy = new AsynchServiceProxy(this.id, BFTNode.DEFAULT_CONFIG_FOLDER);
+            this.proxy = new AsynchServiceProxy(this.id, configDir);
             
             this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 //do nothing

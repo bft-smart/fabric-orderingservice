@@ -53,8 +53,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.LineIterator;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
@@ -71,12 +71,11 @@ import org.hyperledger.fabric.sdk.helper.Config;
  */
 public class BFTNode extends DefaultRecoverable {
 
-    public final static String DEFAULT_CONFIG_FOLDER = "./config/";
+    private static String configDir;
 
     private final int id;
     private final CryptoPrimitives crypto;
-    private final Log logger;
-    private final String configFolder;
+    private final Logger logger;
     private final TOMConfiguration replicaConf;
     private ServiceReplica replica = null;
 
@@ -123,15 +122,14 @@ public class BFTNode extends DefaultRecoverable {
     private Set<Integer> receivers;
 
     
-    public BFTNode(int id, String configFolder) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException, CertificateException {
+    public BFTNode(int id) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException, CertificateException {
 
         this.replicaLock = new ReentrantLock();
         this.replicaReady = replicaLock.newCondition();
 
         this.id = id;
-        this.configFolder = (configFolder != null ? configFolder : BFTNode.DEFAULT_CONFIG_FOLDER);
         
-        this.replicaConf = new TOMConfiguration(this.id, this.configFolder);
+        this.replicaConf = new TOMConfiguration(this.id, this.configDir);
 
         loadConfig();
                 
@@ -139,7 +137,7 @@ public class BFTNode extends DefaultRecoverable {
         this.crypto.init();
         BFTCommon.init(crypto);
         
-        this.logger = LogFactory.getLog(BFTNode.class);
+        this.logger = LoggerFactory.getLogger(BFTNode.class);
 
         this.queue = new LinkedBlockingQueue<>();
         this.executor = Executors.newWorkStealingPool(this.parallelism);
@@ -163,7 +161,7 @@ public class BFTNode extends DefaultRecoverable {
         
         this.mspManager = MSPManager.getInstance(mspid, sysChannel);
                 
-        this.replica = new ServiceReplica(this.id, this.configFolder, this, this, null,
+        this.replica = new ServiceReplica(this.id, this.configDir, this, this, null,
                 
             new DefaultReplier() {
 
@@ -189,7 +187,7 @@ public class BFTNode extends DefaultRecoverable {
     
     private void loadConfig() throws IOException, CertificateException {
         
-        LineIterator it = FileUtils.lineIterator(new File(this.configFolder + "node.config"), "UTF-8");
+        LineIterator it = FileUtils.lineIterator(new File(this.configDir + "node.config"), "UTF-8");
         
         Map<String,String> configs = new TreeMap<>();
         
@@ -243,15 +241,18 @@ public class BFTNode extends DefaultRecoverable {
     public static void main(String[] args) throws Exception {
 
         if (args.length < 1) {
-            System.out.println("Use: java BFTNode <processId> [<config folder>]");
+            System.out.println("Use: java bft.BFTNode <processId>");
             System.exit(-1);
         }
-        String configFolder = null;
-        if (args.length > 1) configFolder = args[1];
         
+        configDir = BFTCommon.getBFTSMaRtConfigDir("NODE_CONFIG_DIR");
+        
+        if (System.getProperty("logback.configurationFile") == null)
+            System.setProperty("logback.configurationFile", configDir + "logback.xml");
+                
         Security.addProvider(new BouncyCastleProvider());
         
-        new BFTNode(Integer.parseInt(args[0]),configFolder);
+        new BFTNode(Integer.parseInt(args[0]));
     }
 
     @Override

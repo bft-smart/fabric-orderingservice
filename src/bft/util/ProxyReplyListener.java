@@ -5,7 +5,6 @@
  */
 package bft.util;
 
-import bft.util.BFTCommon;
 import bftsmart.reconfiguration.views.View;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;
@@ -23,8 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.hyperledger.fabric.protos.common.Common;
 
 /**
@@ -42,7 +41,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     private Lock inputLock;
     private Condition blockAvailable;
                 
-    private Log logger;
+    private Logger logger;
     
     //used to detected updates to the view
     private int nextView;
@@ -68,7 +67,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
     }
     
     private void init() {
-        logger = LogFactory.getLog(ProxyReplyListener.class);
+        logger = LoggerFactory.getLogger(ProxyReplyListener.class);
         
         responses = new ConcurrentHashMap<>();
         replies = new HashMap<>();

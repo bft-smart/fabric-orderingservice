@@ -5,7 +5,6 @@
  */
 package bft.util;
 
-import bft.util.MSPManager;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.util.TOMUtil;
 import com.google.protobuf.ByteString;
@@ -56,8 +55,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OutputStream;
 import org.bouncycastle.asn1.DEROctetString;
@@ -87,8 +86,10 @@ import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
  */
 public class BFTCommon {
     
-    private static Log logger;
+    private static Logger logger;
     private static CryptoPrimitives crypto;
+    
+    public final static String DEFAULT_CONFIG_DIR = "./config/";
         
     public static class BFTException extends Exception {
         
@@ -177,7 +178,25 @@ public class BFTCommon {
     public static void init(CryptoPrimitives crypt) throws NoSuchAlgorithmException, NoSuchProviderException{
         
         crypto = crypt;
-        logger = LogFactory.getLog(Common.class);
+        logger = LoggerFactory.getLogger(Common.class);
+    }
+    
+    public static String getBFTSMaRtConfigDir(String envVar) {
+        
+        String configDir = BFTCommon.DEFAULT_CONFIG_DIR;
+
+        String envDir = System.getenv(envVar);
+                
+        if (envDir != null) {
+            
+            File path = new File(envDir);
+            if (path.exists() && path.isDirectory()) configDir = envDir;
+        }
+        
+        if (!configDir.endsWith("/")) configDir = configDir + "/";
+        
+        return configDir;
+        
     }
     
     public static Duration parseDuration(String s) {

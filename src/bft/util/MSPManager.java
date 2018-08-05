@@ -36,8 +36,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.commons.codec.binary.Hex;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.hyperledger.fabric.protos.common.Common;
 import org.hyperledger.fabric.protos.common.Configtx;
 import org.hyperledger.fabric.protos.common.Configuration;
@@ -53,7 +53,7 @@ import org.hyperledger.fabric.sdk.exception.CryptoException;
  */
 public class MSPManager {
     
-    private static Log logger;
+    private static Logger logger;
     //internal state
     private String mspid;
     private String sysChannel;
@@ -578,7 +578,7 @@ public class MSPManager {
         this.mspid = mspid;
         this.sysChannel = sysChannel;
         
-        logger = LogFactory.getLog(MSPManager.class);
+        logger = LoggerFactory.getLogger(MSPManager.class);
 
     }
     
