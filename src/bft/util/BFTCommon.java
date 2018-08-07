@@ -482,7 +482,7 @@ public class BFTCommon {
         return newConfEnvBuilder.build();
     }
     
-    public static Common.Envelope makeUnsignedEnvelope(ByteString dataMsg, Common.HeaderType headerType, int version, String chainID, long epoch, long timestamp, byte[] creator, byte[] nonce, PrivateKey privKey) throws CryptoException {
+    public static Common.Envelope makeUnsignedEnvelope(ByteString dataMsg, ByteString sigHeader, Common.HeaderType headerType, int version, String chainID, long epoch, long timestamp) throws CryptoException {
         
         //if (crypto == null) throw new BFTException("No CryptoPrimitive object suplied");
 
@@ -492,7 +492,7 @@ public class BFTCommon {
         Common.Header.Builder header = Common.Header.newBuilder();
         header.setChannelHeader(chanHeader.toByteString());
         //header.setSignatureHeader(sigHeader.toByteString());
-        header.setSignatureHeader(ByteString.EMPTY);
+        header.setSignatureHeader(sigHeader);
         
         Common.Payload.Builder payload = Common.Payload.newBuilder();
         payload.setData(dataMsg);
@@ -545,7 +545,7 @@ public class BFTCommon {
             return TOMUtil.verifySignature(key, bos.toByteArray(), tuple.signature);
             
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logger.error("Failed to verify frontend signature", ex);
             return false;
         }
     }
@@ -563,7 +563,7 @@ public class BFTCommon {
                 root.verify(key);
                 selfSigned.add(root);
             } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | SignatureException ex) {
-                ex.printStackTrace();
+                logger.error("Failed to select self-signed certificates", ex);
             }
 
         }

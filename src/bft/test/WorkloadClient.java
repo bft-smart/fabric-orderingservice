@@ -6,15 +6,34 @@
 package bft.test;
 
 import bft.util.BFTCommon;
+import bft.util.ProxyReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
+import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import com.google.protobuf.ByteString;
+import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.PrivateKey;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.Random;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.LineIterator;
 import org.hyperledger.fabric.protos.common.Common;
+import org.hyperledger.fabric.protos.msp.Identities;
+import org.hyperledger.fabric.sdk.exception.CryptoException;
+import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -22,12 +41,41 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class WorkloadClient {
     
+    private static Logger logger;
+    private static Logger loggerLatency;
     private static String configDir;
+    private static CryptoPrimitives crypto;
+    
+    private static ProxyReplyListener proxy;
+    
+    //arguments
+    private enum TxType {
+        
+        random, unsigned, signed
+    }
+    
+    private static int frontendID;
+    private static String channelID;
+    private static int clients;
+    private static int envSize;
+    private static TxType txType;
+    private static int delay;
+    
+    // Own MSP artifacts
+    private static String mspid = null;
+    private static PrivateKey privKey = null;
+    private static X509Certificate certificate = null;
+    private static byte[] serializedCert = null;
+    private static Identities.SerializedIdentity ident;
+    
+    //timestamps for latencies
+    private static Map<Integer,Long> timestamps;
+
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 4) {
-            System.out.println("Use: java bft.test.WorkloadClient <frontend ID> <channel ID> <num clients> <envelope payload size>");
+        if(args.length < 6) {
+            System.out.println("Use: java bft.test.WorkloadClient <frontend ID> <channel ID> <num clients> <payload size> <random|unsigned|signed> <delay (ms)>");
             System.exit(-1);
         }      
         
@@ -36,61 +84,86 @@ public class WorkloadClient {
         if (System.getProperty("logback.configurationFile") == null)
             System.setProperty("logback.configurationFile", configDir + "logback.xml");
         
-        int frontendID = Integer.parseInt(args[0]);
-        String channelID = args[1];
-        int clients = Integer.parseInt(args[2]);
+        logger = LoggerFactory.getLogger(WorkloadClient.class);
+        loggerLatency = LoggerFactory.getLogger("latency");
         
+        loadConfig();
         
-        AsynchServiceProxy proxy = new AsynchServiceProxy(frontendID, configDir);
-        proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
+        WorkloadClient.crypto = new CryptoPrimitives();
+        WorkloadClient.crypto.init();
+        BFTCommon.init(WorkloadClient.crypto);
+                
+        frontendID = Integer.parseInt(args[0]);
+        channelID = args[1];
+        clients = Integer.parseInt(args[2]);
+        envSize = Integer.parseInt(args[3]);
+        txType = TxType.valueOf(args[4]);
+        delay = Integer.parseInt(args[5]);
+        
+        proxy = new ProxyReplyListener(frontendID, configDir);
+        //proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
                 // do nothing
-            });
+        //    });
         
+        
+        timestamps = new ConcurrentHashMap<>();
         
         // request latest reply sequence from the ordering nodes
         int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
         proxy.cleanAsynchRequest(reqId);
-            
-        Random rand = new Random(System.nanoTime());
-        byte[] payload = new byte[Integer.parseInt(args[3])];
-        
-        rand.nextBytes(payload);
-        
-        Common.Envelope.Builder builder = Common.Envelope.newBuilder();
-        
-        builder.setPayload(ByteString.copyFrom(payload));
-        builder.setSignature(ByteString.copyFrom(new byte[0]));
-        
-        Common.Envelope env = builder.build();
         
         ExecutorService executor = Executors.newCachedThreadPool();
         
 
         for (int i = 0; i < clients; i++) {
         
-            executor.execute(new ProxyThread(i + frontendID + 1, channelID, env.toByteArray()));
+            executor.execute(new WorkerThread(i + frontendID + 1));
         
         }
+        
+        new ProxyThread().start();
     }
     
-    private static class ProxyThread implements Runnable {
+    private static void loadConfig() throws IOException, CertificateException {
+        
+        LineIterator it = FileUtils.lineIterator(new File(WorkloadClient.configDir + "node.config"), "UTF-8");
+        
+        Map<String,String> configs = new TreeMap<>();
+        
+        while (it.hasNext()) {
+        
+            String line = it.nextLine();
+            
+            if (!line.startsWith("#") && line.contains("=")) {
+            
+                String[] params = line.split("\\=");
+                
+                configs.put(params[0], params[1]);
+            
+            }
+        }
+        
+        it.close();
+        
+        mspid = configs.get("MSPID");
+        privKey = BFTCommon.getPemPrivateKey(configs.get("PRIVKEY"));
+        certificate = BFTCommon.getCertificate(configs.get("CERTIFICATE"));
+        serializedCert = BFTCommon.getSerializedCertificate(certificate);
+        ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);
+    }
+    
+    private static class WorkerThread implements Runnable {
         
         int id;
-        String channelID;
-        byte[] env;
-        AsynchServiceProxy proxy;
-
+        AsynchServiceProxy worker;
+        long count;
         
-        public ProxyThread (int id, String channelID, byte[] env) {
+        Random rand = new Random(System.nanoTime());
+        
+        public WorkerThread (int id) {
             this.id = id;
-            this.channelID = channelID;
-            this.env = env;
-            this.proxy = new AsynchServiceProxy(this.id, configDir);
-            
-            this.proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                //do nothing
-            });
-
+            this.worker = new AsynchServiceProxy(this.id, configDir);
+            this.count = 0;            
         }
 
         @Override
@@ -101,15 +174,145 @@ public class WorkloadClient {
                 
                     try {
                         
-                        int reqId = proxy.invokeAsynchRequest(BFTCommon.serializeRequest("REGULAR", this.channelID, this.env), null, TOMMessageType.ORDERED_REQUEST);
-                        proxy.cleanAsynchRequest(reqId);
+                                                
+                        int hash = 7;
+                        hash = 31 * hash + this.id;
+                        hash = 31 * hash + Long.hashCode(this.count);
                         
-                    } catch (IOException ex) {
+                        int size = Math.max(envSize, Integer.BYTES);
                         
-                        ex.printStackTrace();
-                    }
+                        ByteBuffer buffer = ByteBuffer.allocate(size);
+                        
+                        buffer.putInt(hash);
+                        
+                        while (buffer.remaining() > 0) {
+                            buffer.put((byte) rand.nextInt());
+                        }
+                                       
+                        
+                        byte[] array = buffer.array();
+                        
+                        byte[] req = array;
+                        
+                        if (txType != TxType.random) {
+                            
+                            byte[] nonce = new byte[10];
+                            rand.nextBytes(nonce);
+
+                            Common.SignatureHeader sigHeader = BFTCommon.createSignatureHeader(ident.toByteArray(), nonce);
+
+                            Common.Envelope.Builder env = BFTCommon.makeUnsignedEnvelope(ByteString.copyFrom(array),
+                                    sigHeader.toByteString(), Common.HeaderType.MESSAGE, 0, channelID, 0,System.currentTimeMillis()).toBuilder();
+
+                            /*Common.Payload.Builder payload = Common.Payload.parseFrom(env.getPayload()).toBuilder();
+                            Common.Header.Builder header = payload.getHeader().toBuilder();
+
+                            header.setSignatureHeader(sigHeader.toByteString());
+                            payload.setHeader(header);
+                            env.setPayload(payload.build().toByteString());*/
+
+                            if (txType == TxType.signed) {
+
+                                byte[] sig = crypto.sign(privKey, env.getPayload().toByteArray());
+
+                                env.setSignature(ByteString.copyFrom(sig));                        
+                            } else {
+
+                                env.setSignature(ByteString.EMPTY);
+                            }
+
+                            req = env.build().toByteArray();
+                        }
+                        
+                        timestamps.put(hash, System.currentTimeMillis());
+                        
+                        this.worker.invokeAsynchRequest(BFTCommon.serializeRequest("REGULAR", channelID, req), new bftsmart.communication.client.ReplyListener(){
+
+                            private int replies = 0;
+
+                            @Override
+                            public void reset() {
+
+                                replies = 0;
+                            }
+
+                            @Override
+                            public void replyReceived(RequestContext rc, TOMMessage tomm) {
+
+                                if (Arrays.equals(tomm.getContent(), "ACK".getBytes())) replies++;
+
+                                double q = Math.ceil((double) (worker.getViewManager().getCurrentViewN() + worker.getViewManager().getCurrentViewF() + 1) / 2.0);
+
+                                if (replies >= q) {
+                                        worker.cleanAsynchRequest(rc.getOperationId());
+                                }
+                            }
+
+                        }, TOMMessageType.ORDERED_REQUEST);
+                        
+                        //this.worker.cleanAsynchRequest(reqId);
+                        
+                        logger.debug("[{}]Sent envelope #{} with {} bytes", this.id, this.count, req.length);
+
+                        this.count++;
+                                                
+                        if (delay > 0) {
+                            
+                            Thread.sleep(delay);
+                        }
+                        
+                    } catch (CryptoException | IOException ex) {
+                        
+                        logger.error("Failed to send payload to nodes", ex);
+                    } catch (InterruptedException ex) {
+                        
+                        logger.error("Interruption while sleeping", ex);
+                    } 
                 }
             }
         
+    }
+    
+    private static class ProxyThread extends Thread {
+        
+        public void run() {
+            
+            while (true) {
+                
+                try {
+                    Map.Entry<String,Common.Block> reply = proxy.getNext();
+
+                    Common.BlockData data = reply.getValue().getData();
+
+                    for (ByteString env : data.getDataList()) {
+                        
+                        byte[] req = env.toByteArray();
+                        
+                        if (txType != TxType.random) {
+                        
+                            Common.Payload payload = Common.Payload.parseFrom(Common.Envelope.parseFrom(env).getPayload());
+                            req = payload.getData().toByteArray();
+                        
+                        }
+                        
+                        ByteBuffer buffer = ByteBuffer.wrap(req);
+                        
+                        int hash = buffer.getInt();
+                        
+                        Long ts = timestamps.remove(hash);
+                       
+                        if (ts != null)
+                            loggerLatency.info("block#" + reply.getValue().getHeader().getNumber() + "\t" + (System.currentTimeMillis() - ts));
+                        else logger.debug("Envelope with latency id " + hash + " at block#" + reply.getValue().getHeader().getNumber() + " not for me");
+                    }
+                    
+                    logger.debug("Finished processing block#" + reply.getValue().getHeader().getNumber());
+                } catch (Exception ex) {
+                    
+                    logger.error("Failed to fetch latency result", ex);
+                }
+            
+            }
+        }
     }
 }

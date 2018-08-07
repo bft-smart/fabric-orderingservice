@@ -164,10 +164,18 @@ public class BlockCutter {
 	return batch;
     }
             
-    private int messageSizeBytes(byte[] bytes) throws IOException {
+    private int messageSizeBytes(byte[] bytes) {
         
-        Common.Envelope env = Common.Envelope.parseFrom(bytes);
-	return env.getPayload().size() + env.getSignature().size();
+        try {
+            
+            Common.Envelope env = Common.Envelope.parseFrom(bytes);
+            return env.getPayload().size() + env.getSignature().size();
+            
+        } catch (Exception e) {
+            
+            logger.warn("Invalid envelope, using native 'length' attribute");
+            return bytes.length;
+        }
     }
     
     public void setBatchParms(String channel, long preferredMaxBytes, long maxMessageCount) {

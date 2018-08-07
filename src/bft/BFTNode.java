@@ -76,6 +76,7 @@ public class BFTNode extends DefaultRecoverable {
     private final int id;
     private final CryptoPrimitives crypto;
     private final Logger logger;
+    private final Logger loggerThroughput;
     private final TOMConfiguration replicaConf;
     private ServiceReplica replica = null;
 
@@ -89,6 +90,7 @@ public class BFTNode extends DefaultRecoverable {
     //envelope validation stuff
     private boolean bothSigs;
     private boolean envValidation;
+    private boolean filterMalformed;
     private long timeWindow;
 
     //signature thread stuff
@@ -138,6 +140,7 @@ public class BFTNode extends DefaultRecoverable {
         BFTCommon.init(crypto);
         
         this.logger = LoggerFactory.getLogger(BFTNode.class);
+        this.loggerThroughput = LoggerFactory.getLogger("throughput");
 
         this.queue = new LinkedBlockingQueue<>();
         this.executor = Executors.newWorkStealingPool(this.parallelism);
@@ -216,6 +219,7 @@ public class BFTNode extends DefaultRecoverable {
         bothSigs = Boolean.parseBoolean(configs.get("BOTH_SIGS"));
         envValidation = Boolean.parseBoolean(configs.get("ENV_VALIDATION"));
         interval = Integer.parseInt(configs.get("THROUGHPUT_INTERVAL"));
+        filterMalformed = Boolean.parseBoolean(configs.get("FILTER_MALFORMED"));
         
         FileInputStream input = new FileInputStream(new File(configs.get("GENESIS")));
         sysGenesis = Common.Block.parseFrom(IOUtils.toByteArray(input));
@@ -332,7 +336,7 @@ public class BFTNode extends DefaultRecoverable {
                         
         } catch (Exception ex) {
             
-            ex.printStackTrace();
+            logger.error("Failed to install snapshot", ex);
         }
     }
 
@@ -423,7 +427,7 @@ public class BFTNode extends DefaultRecoverable {
             
         } catch (IOException ex) {
             
-            ex.printStackTrace();
+            logger.error("Failed to fetch snapshot", ex);
             
         }
         return new byte[0];
@@ -469,10 +473,10 @@ public class BFTNode extends DefaultRecoverable {
             
                 newChannel(mspManager, blockCutter, lastBlockHeaders, this.sysChannel, this.sysGenesis, msgCtx.getTimestamp());
                 
-            } catch (Exception e) {
+            } catch (Exception ex) {
                 
                 //TODO: handle error
-                e.printStackTrace();
+                logger.error("Failed to create new channel", ex);
                 return new byte[0];
             }
             
@@ -546,7 +550,7 @@ public class BFTNode extends DefaultRecoverable {
             if (countEnvelopes % interval == 0) {
 
                 float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - envelopeMeasurementStartTime));
-                logger.info("Throughput = " + tp + " envelopes/sec");
+                loggerThroughput.info("envelopes/second\t" + tp);
                 envelopeMeasurementStartTime = System.currentTimeMillis();
 
             }
@@ -558,6 +562,19 @@ public class BFTNode extends DefaultRecoverable {
 
             logger.debug("Received envelope" + Arrays.toString(tuple.payload) + " for channel id " + tuple.channelID + (isConfig ? " (type config)" : " (type normal)"));
 
+            try { //filter malformed envelopes, if option is enabled
+                
+                Common.Envelope.parseFrom(tuple.payload);
+            
+            } catch (Exception e) {
+                
+                if (filterMalformed) {
+                    
+                    logger.info("Discarding malformed envelope");
+                    return new byte[0];
+                }
+            }
+            
             List<byte[][]> batches = blockCutter.ordered(tuple.channelID, tuple.payload, isConfig);
             
             if (batches.size() > 0) {
@@ -577,10 +594,10 @@ public class BFTNode extends DefaultRecoverable {
             
             this.blockCutter = blockCutter;
 
-        } catch (Exception e) {
+        } catch (Exception ex) {
             
             //TODO: handle error
-            e.printStackTrace();
+            logger.error("Failed to process envelope", ex);
             return new byte[0];
             
         }
@@ -703,8 +720,8 @@ public class BFTNode extends DefaultRecoverable {
                     //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
                     //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
                     //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
-                    Common.Envelope newEnvelope = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), Common.HeaderType.CONFIG, 0, channel, 0, 
-                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    Common.Envelope newEnvelope = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), ByteString.EMPTY, Common.HeaderType.CONFIG, 0, channel, 0, 
+                            msgCtx.getTimestamp());
                     
                     block = BFTCommon.createNextBlock(block.getHeader().getNumber(), block.getHeader().getPreviousHash().toByteArray(), new byte[][] { newEnvelope.toByteArray() });
                     
@@ -732,13 +749,13 @@ public class BFTNode extends DefaultRecoverable {
                     //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
                     //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
                     //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
-                    Common.Envelope envelopeClone = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), Common.HeaderType.CONFIG, 0, confUpdate.getChannelId(), 0, 
-                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    Common.Envelope envelopeClone = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), ByteString.EMPTY, Common.HeaderType.CONFIG, 0, confUpdate.getChannelId(), 0, 
+                            msgCtx.getTimestamp());
                     
                     Common.Block genesis = BFTCommon.createNextBlock(0, null, new byte[][]{envelopeClone.toByteArray()});
                     
-                    envelopeClone = BFTCommon.makeUnsignedEnvelope(envelopeClone.toByteString(), Common.HeaderType.ORDERER_TRANSACTION, 0, channel, 0, 
-                            msgCtx.getTimestamp(), ident.toByteArray(), msgCtx.getNonces(), privKey);
+                    envelopeClone = BFTCommon.makeUnsignedEnvelope(envelopeClone.toByteString(), ByteString.EMPTY, Common.HeaderType.ORDERER_TRANSACTION, 0, channel, 0, 
+                            msgCtx.getTimestamp());
                     
                     block = BFTCommon.createNextBlock(block.getHeader().getNumber(), block.getHeader().getPreviousHash().toByteArray(), new byte[][] { envelopeClone.toByteArray() });
 
@@ -865,13 +882,24 @@ public class BFTNode extends DefaultRecoverable {
                                 
                                 try {
                                     
-                                    tuple.clonedManager.validateEnvelope(Common.Envelope.parseFrom(env), tuple.channelID, tuple.msgContext.getTimestamp(), timeWindow);
-
+                                    Common.Envelope e = null;
+                                    
+                                    try {
+                                        
+                                        e = Common.Envelope.parseFrom(env);
+                                        
+                                    } catch (Exception ex) {
+                                        
+                                        logger.warn("Malformed envelope, discarding");
+                                        continue;
+                                    }
+                                    
+                                    tuple.clonedManager.validateEnvelope(e, tuple.channelID, tuple.msgContext.getTimestamp(), timeWindow);
                                     filtered.addData(env);
-                                
+                               
                                 } catch (BFTCommon.BFTException ex) {
                                     
-                                    logger.info("Envelope validation failed for envelope, discarding.");
+                                    logger.info("Envelope validation failed, discarding.");
                                 }
         
                             }
@@ -904,7 +932,7 @@ public class BFTNode extends DefaultRecoverable {
                         if (countBlocks % interval == 0) {
 
                             float tp = (float) (interval * 1000 / (float) (System.currentTimeMillis() - blockMeasurementStartTime));
-                            logger.info("Throughput = " + tp + " blocks/sec");
+                            loggerThroughput.info("blocks/second\t" + tp);
                             blockMeasurementStartTime = System.currentTimeMillis();
 
                         }
@@ -952,7 +980,7 @@ public class BFTNode extends DefaultRecoverable {
                     }
 
                 } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | SignatureException | IOException | CryptoException | InterruptedException | BFTCommon.BFTException ex) {
-                    ex.printStackTrace();
+                    logger.error("Failed to generate block", ex);
                 }
             }
 

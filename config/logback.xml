@@ -9,6 +9,20 @@
     </encoder>
   </appender>
 
+  <appender name="THROUGHPUT_FILE" class="ch.qos.logback.core.FileAppender">
+    <file>throughput_${NODE_ID}.log</file>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS}&#x9;%msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="LATENCY_FILE" class="ch.qos.logback.core.FileAppender">
+    <file>latency_${WORKLOAD_CLIENT_ID}.log</file>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS}&#x9;%msg%n</pattern>
+    </encoder>
+  </appender>
+
   <!-- https://logback.qos.ch/manual/appenders.html#AsyncAppender
   http://blog.takipi.com/how-to-instantly-improve-your-java-logging-with-7-logback-tweaks/
    -->
@@ -24,7 +38,17 @@
   </root>
   
   <logger name="org.hyperledger.fabric.sdk" level="OFF" />
+  <logger name="bftsmart" level="INFO" />
   <logger name="bft" level="INFO" />
   <logger name="io.netty" level="OFF" />
+  <logger name="throughput" level="INFO" >
+
+    <appender-ref ref="THROUGHPUT_FILE" />
+  </logger>
+
+  <logger name="latency" level="INFO" >
+
+    <appender-ref ref="LATENCY_FILE" />
+  </logger>
 
 </configuration>

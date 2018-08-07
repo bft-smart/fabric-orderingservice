@@ -979,7 +979,7 @@ public class MSPManager {
             
         } catch (Exception ex) {
             
-            ex.printStackTrace();
+            if (!(ex instanceof BFTCommon.BFTException)) logger.error("Failed to validate envelope", ex);
                         
             throw new BFTCommon.BFTException("Envelope is invalid: " + ex.getLocalizedMessage());
             
@@ -2043,7 +2043,7 @@ public class MSPManager {
 
         } catch (InvalidProtocolBufferException ex) {
             
-            ex.printStackTrace();
+            logger.error("Failed to extract MSP configs", ex);
             return null;
         }
 

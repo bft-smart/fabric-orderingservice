@@ -8,5 +8,10 @@ RUN apt-get clean -y
 
 WORKDIR /etc/bftsmart-orderer/
 
-ENTRYPOINT ["java", "-cp", "bin/orderingservice.jar:lib/*", "bft.BFTNode"]
+RUN echo "#!/bin/bash" > startReplica.sh
+RUN echo "java -DNODE_ID=\$1 -cp bin/orderingservice.jar:lib/* bft.BFTNode \$@" >> startReplica.sh
+
+RUN chmod +x ./startReplica.sh
+
+ENTRYPOINT ["./startReplica.sh"]
 CMD [""]

@@ -16,7 +16,6 @@ import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -162,7 +161,9 @@ public class BFTProxy {
             }
 
         } catch (IOException | NoSuchAlgorithmException | NoSuchProviderException e) {
-            e.printStackTrace();
+            
+            logger.error("Failed to launch frontend", e);
+            System.exit(1);
         }
     }
     
@@ -302,7 +303,7 @@ public class BFTProxy {
                 
                 
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    logger.error("Error while receiving envelope from Go component", ex);
                     continue;
                 }
                 
@@ -343,7 +344,7 @@ public class BFTProxy {
 
                 Map.Entry<String,Common.Block> reply = sysProxy.getNext();
                 
-                System.out.println("Received block # " + reply.getValue().getHeader().getNumber());
+                logger.info("Received block # " + reply.getValue().getHeader().getNumber());
                 
                 if (reply != null) {
 
@@ -380,7 +381,7 @@ public class BFTProxy {
                         os.write(isConfig ? (byte) 1 : (byte) 0);                    
                         
                     } catch (IOException ex) {
-                        ex.printStackTrace();
+                        logger.error("Error while sending block to Go component", ex);
                     }
                 }
             }
@@ -409,7 +410,7 @@ public class BFTProxy {
                 
                 timers.put(this.channel, timer);
             } catch (IOException ex) {
-                ex.printStackTrace();
+                logger.error("Failed to send envelope to nodes", ex);
             }
 
         }

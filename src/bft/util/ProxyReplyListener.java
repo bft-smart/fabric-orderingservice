@@ -165,7 +165,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         
         if (sameContent >= replyQuorum) {
 
-            System.out.println("Updating ProxyListener to sequence " + s);
+            logger.info("Updating ProxyListener to sequence " + s);
 
             next = s;
 
@@ -201,7 +201,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
 
         if (sameContent >= replyQuorum && v.getId() > getViewManager().getCurrentViewId()) {
 
-            System.out.println("Updating ProxyListener to view " + v.getId());
+            logger.info("Updating ProxyListener to view " + v.getId());
 
             reconfigureTo(v);
 
@@ -251,7 +251,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             config = (contents[4][0] == 1);
             
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logger.error("Failed to deserialize block and metadata", ex);
             return;
         }
 
@@ -302,7 +302,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
                     invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getRSAPrivateKey(), "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
                             null, TOMMessageType.ORDERED_REQUEST);
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    logger.error("Failed to send GETVIEW request to nodes", ex);
                 }
 
             }
