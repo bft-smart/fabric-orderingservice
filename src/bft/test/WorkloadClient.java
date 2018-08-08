@@ -58,6 +58,7 @@ public class WorkloadClient {
     private static String channelID;
     private static int clients;
     private static int envSize;
+    private static int txsPerWorker;
     private static TxType txType;
     private static int delay;
     
@@ -74,8 +75,8 @@ public class WorkloadClient {
     
     public static void main(String[] args) throws Exception{
 
-        if(args.length < 6) {
-            System.out.println("Use: java bft.test.WorkloadClient <frontend ID> <channel ID> <num clients> <payload size> <random|unsigned|signed> <delay (ms)>");
+        if(args.length < 7) {
+            System.out.println("Use: java bft.test.WorkloadClient <frontend ID> <channel ID> <num workers> <payload size> <txs per worker> <random|unsigned|signed> <delay (ms)>");
             System.exit(-1);
         }      
         
@@ -97,8 +98,9 @@ public class WorkloadClient {
         channelID = args[1];
         clients = Integer.parseInt(args[2]);
         envSize = Integer.parseInt(args[3]);
-        txType = TxType.valueOf(args[4]);
-        delay = Integer.parseInt(args[5]);
+        txsPerWorker = Integer.parseInt(args[4]);
+        txType = TxType.valueOf(args[5]);
+        delay = Integer.parseInt(args[6]);
         
         proxy = new ProxyReplyListener(frontendID, configDir);
         //proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
@@ -170,7 +172,7 @@ public class WorkloadClient {
         public void run() {
                 
 
-                while (true) {
+                while (this.count < txsPerWorker) {
                 
                     try {
                         
@@ -269,6 +271,7 @@ public class WorkloadClient {
                         logger.error("Interruption while sleeping", ex);
                     } 
                 }
+                logger.info("[{}] finished", this.id);
             }
         
     }
