@@ -46,7 +46,7 @@ public class WorkloadClient {
     private static String configDir;
     private static CryptoPrimitives crypto;
     
-    private static ProxyReplyListener proxy;
+    private static ProxyReplyListener proxy = null;
     
     //arguments
     private enum TxType {
@@ -87,9 +87,7 @@ public class WorkloadClient {
         
         logger = LoggerFactory.getLogger(WorkloadClient.class);
         loggerLatency = LoggerFactory.getLogger("latency");
-        
-        loadConfig();
-        
+                
         WorkloadClient.crypto = new CryptoPrimitives();
         WorkloadClient.crypto.init();
         BFTCommon.init(WorkloadClient.crypto);
@@ -102,20 +100,19 @@ public class WorkloadClient {
         txType = TxType.valueOf(args[5]);
         delay = Integer.parseInt(args[6]);
         
-        proxy = new ProxyReplyListener(frontendID, configDir);
-        //proxy.getCommunicationSystem().setReplyReceiver((TOMMessage tomm) -> {
-                // do nothing
-        //    });
+        loadConfig();
+
         
+        timestamps = new ConcurrentHashMap<>(); 
         
-        timestamps = new ConcurrentHashMap<>();
-        
-        // request latest reply sequence from the ordering nodes
-        int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
-        proxy.cleanAsynchRequest(reqId);
+        if (proxy != null) {
+            
+            int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            proxy.cleanAsynchRequest(reqId);
+            new ProxyThread().start();
+        }
         
         ExecutorService executor = Executors.newCachedThreadPool();
-        
 
         for (int i = 0; i < clients; i++) {
         
@@ -123,7 +120,6 @@ public class WorkloadClient {
         
         }
         
-        new ProxyThread().start();
     }
     
     private static void loadConfig() throws IOException, CertificateException {
@@ -152,6 +148,18 @@ public class WorkloadClient {
         certificate = BFTCommon.getCertificate(configs.get("CERTIFICATE"));
         serializedCert = BFTCommon.getSerializedCertificate(certificate);
         ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);
+        
+        String[] IDs = configs.get("RECEIVERS").split("\\,");
+        int[] recvs = Arrays.asList(IDs).stream().mapToInt(Integer::parseInt).toArray();
+        
+        for (int o : recvs) {
+            if (o == frontendID) {
+                
+                proxy = new ProxyReplyListener(frontendID, configDir);
+                
+                break;
+            }
+        }
     }
     
     private static class WorkerThread implements Runnable {
