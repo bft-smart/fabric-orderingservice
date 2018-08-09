@@ -2,28 +2,35 @@
 
 function main () {
 
+	dir=./peer_material
+
+	if [ ! -z $1 ]; then
+
+		dir=$1	
+	fi
+
 	docker pull hyperledger/fabric-peer:x86_64-1.1.1
 
 	docker create --name="peer-temp" "hyperledger/fabric-peer:x86_64-1.1.1" > /dev/null
 	id=$(docker ps -aqf "name=peer-temp")
 
-	if [ ! -d ./peer_material ]; then
-	    mkdir ./peer_material
+	if [ ! -d $dir ]; then
+	    mkdir $dir
 	fi
 
-	if [ ! -d ./peer_material/fabric ]; then
+	if [ ! -d $dir/fabric ]; then
 
-		docker cp $id:/etc/hyperledger/fabric/ ./peer_material/
+		docker cp $id:/etc/hyperledger/fabric/ $dir/
 
-		if [ -f ./peer_material/fabric/configtx.yaml ]; then
+		if [ -f $dir/fabric/configtx.yaml ]; then
 
-			rm ./peer_material/fabric/configtx.yaml
+			rm $dir/fabric/configtx.yaml
 
 		fi
 
-		if [ -f ./peer_material/fabric/orderer.yaml ]; then
+		if [ -f $dir/fabric/orderer.yaml ]; then
 
-			rm ./peer_material/fabric/orderer.yaml
+			rm $dir/fabric/orderer.yaml
 
 		fi
 	fi
@@ -31,8 +38,7 @@ function main () {
 	docker rm -v $id > /dev/null
 
 	echo ""
-	echo "Default configuration available at '$PWD/peer_material/'"
-	echo "Generate containers with 'create_peer_container.sh <container name>'"
+	echo "Default configuration available at '$dir'"
 	echo ""
 }
 

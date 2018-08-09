@@ -2,43 +2,59 @@
 
 function main () {
 
-	docker pull bftsmart/fabric-orderingnode
+	dir=./orderingnode_material
 
-	docker create --name="os-temp" "bftsmart/fabric-orderingnode" > /dev/null
+	if [ ! -z $1 ]; then
+
+		dir=$1	
+	fi
+
+	docker pull bftsmart/fabric-orderingnode:x86_64-1.1.1
+
+	docker create --name="os-temp" "bftsmart/fabric-orderingnode:x86_64-1.1.1" > /dev/null
 	id=$(docker ps -aqf "name=os-temp")
 
-	if [ ! -d ./orderingnode_material ]; then
-	    mkdir ./orderingnode_material
+	if [ ! -d $dir ]; then
+	    mkdir $dir
 	fi
 
-	if [ ! -f ./orderingnode_material/hosts.config ]; then
-		cp ../config/hosts.config ./orderingnode_material
-		#nano ./orderingnode_material/hosts.config
+	if [ ! -f $dir/hosts.config ]; then
+		cp ../config/hosts.config $dir
+
 	fi
 
 
-	if [ ! -f ./orderingnode_material/system.config ]; then
-		cp ../config/system.config ./orderingnode_material
-		#nano ./orderingnode_material/system.config
+	if [ ! -f $dir/system.config ]; then
+		cp ../config/system.config $dir
+
 	fi
 
-	if [ ! -f ./orderingnode_material/genesisblock ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/genesisblock ./orderingnode_material
+	if [ ! -f $dir/node.config ]; then
+		cp ../config/node.config $dir
+
 	fi
 
-	if [ ! -f ./orderingnode_material/cert.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/cert.pem ./orderingnode_material
+	if [ ! -f $dir/logback.xml ]; then
+		cp ../config/logback.xml $dir
+
 	fi
 
-	if [ ! -f ./orderingnode_material/key.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/key.pem ./orderingnode_material
+	if [ ! -f $dir/genesisblock ]; then
+		docker cp $id:/etc/bftsmart-orderer/config/genesisblock $dir
+	fi
+
+	if [ ! -f $dir/cert.pem ]; then
+		docker cp $id:/etc/bftsmart-orderer/config/cert.pem $dir
+	fi
+
+	if [ ! -f $dir/key.pem ]; then
+		docker cp $id:/etc/bftsmart-orderer/config/key.pem $dir
 	fi
 
 	docker rm -v $id > /dev/null
 
 	echo ""
-	echo "Default configuration available at '$PWD/orderingnode_material/'"
-	echo "Generate containers with 'create_orderingnode_container.sh <container name> <replica ID>'"
+	echo "Default configuration available at '$dir'"
 	echo ""
 }
 

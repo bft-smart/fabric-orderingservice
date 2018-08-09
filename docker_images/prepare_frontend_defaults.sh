@@ -2,43 +2,58 @@
 
 function main () {
 
-	docker pull bftsmart/fabric-frontend
+	dir=./frontend_material
 
-	docker create --name="frontend-temp" "bftsmart/fabric-frontend" > /dev/null
+	if [ ! -z $1 ]; then
+
+		dir=$1	
+	fi
+
+	docker pull bftsmart/fabric-frontend:x86_64-1.1.1
+
+	docker create --name="frontend-temp" "bftsmart/fabric-frontend:x86_64-1.1.1" > /dev/null
 	id=$(docker ps -aqf "name=frontend-temp")
 
-	if [ ! -d ./frontend_material ]; then
-	    mkdir ./frontend_material
+	if [ ! -d $dir ]; then
+	    mkdir $dir
 	fi
 
-	if [ ! -f ./frontend_material/hosts.config ]; then
-		cp ../config/hosts.config ./frontend_material
-		#nano ./frontend_material/hosts.config
+	if [ ! -f $dir/hosts.config ]; then
+		cp ../config/hosts.config $dir
 	fi
 
 
-	if [ ! -f ./frontend_material/system.config ]; then
-		cp ../config/system.config ./frontend_material
-		#nano ./frontend_material/system.config
+	if [ ! -f $dir/system.config ]; then
+		cp ../config/system.config $dir
 	fi
 
-	if [ ! -f ./frontend_material/genesisblock ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/genesisblock ./frontend_material
+	if [ ! -f $dir/node.config ]; then
+		cp ../config/node.config $dir
+
 	fi
 
-	if [ ! -d ./frontend_material/fabric ]; then
+	if [ ! -f $dir/logback.xml ]; then
+		cp ../config/logback.xml $dir
 
-		docker cp $id:/etc/hyperledger/fabric/ ./frontend_material/
+	fi
 
-		if [ -f ./frontend_material/fabric/configtx.yaml ]; then
+	if [ ! -f $dir/genesisblock ]; then
+		docker cp $id:/etc/bftsmart-orderer/config/genesisblock $dir
+	fi
 
-			rm ./frontend_material/fabric/configtx.yaml
+	if [ ! -d $dir/fabric ]; then
+
+		docker cp $id:/etc/hyperledger/fabric/ $dir
+
+		if [ -f $dir/fabric/configtx.yaml ]; then
+
+			rm $dir/fabric/configtx.yaml
 
 		fi
 
-		if [ -f ./frontend_material/fabric/core.yaml ]; then
+		if [ -f $dir/fabric/core.yaml ]; then
 
-			rm ./frontend_material/fabric/core.yaml
+			rm $dir/fabric/core.yaml
 
 		fi
 
@@ -47,8 +62,7 @@ function main () {
 	docker rm -v $id > /dev/null
 
 	echo ""
-	echo "Default configuration available at '$PWD/frontend_material/'"
-	echo "Generate containers with 'create_frontend_container.sh <container name> <frontend ID>'"
+	echo "Default configuration available at '$dir'"
 	echo ""
 }
 

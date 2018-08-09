@@ -2,28 +2,35 @@
 
 function main () {
 
-	docker pull bftsmart/fabric-tools
+	dir=./cli_material
 
-	docker create --name="cli-temp" "bftsmart/fabric-tools" > /dev/null
-	id=$(docker ps -aqf "name=cli-temp")
+	if [ ! -z $1 ]; then
 
-	if [ ! -d ./cli_material ]; then
-	    mkdir ./cli_material
+		dir=$1	
 	fi
 
-	if [ ! -d ./cli_material/fabric ]; then
+	docker pull bftsmart/fabric-tools:x86_64-1.1.1
 
-		docker cp $id:/etc/hyperledger/fabric/ ./cli_material/
+	docker create --name="cli-temp" "bftsmart/fabric-tools:x86_64-1.1.1" > /dev/null
+	id=$(docker ps -aqf "name=cli-temp")
 
-		if [ -f ./cli_material/fabric/configtx.yaml ]; then
+	if [ ! -d $dir ]; then
+	    mkdir $dir
+	fi
 
-			rm ./cli_material/fabric/configtx.yaml
+	if [ ! -d $dir/fabric ]; then
+
+		docker cp $id:/etc/hyperledger/fabric/ $dir/
+
+		if [ -f $dir/fabric/configtx.yaml ]; then
+
+			rm .$dir/fabric/configtx.yaml
 
 		fi
 
-		if [ -f ./cli_material/fabric/orderer.yaml ]; then
+		if [ -f $dir/fabric/orderer.yaml ]; then
 
-			rm ./cli_material/fabric/orderer.yaml
+			rm $dir/fabric/orderer.yaml
 
 		fi
 	fi
@@ -31,8 +38,7 @@ function main () {
 	docker rm -v $id > /dev/null
 
 	echo ""
-	echo "Default configuration available at '$PWD/cli_material/'"
-	echo "Generate containers with 'create_tools_container.sh <container name> [peers endpoint]'"
+	echo "Default configuration available at '$dir'"
 	echo ""
 }
 
