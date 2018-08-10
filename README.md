@@ -80,7 +80,7 @@ docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-or
 Ordering nodes need to be started from the one with the lowest ID to the one with the highest. Once all ordering nodes have outputed `-- Ready to process operations`, the frontend can also start:
 
 ```
-docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend:x86_64-1.1.1
+docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend:x86_64-1.1.1 1000
 ```
 
 
