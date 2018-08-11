@@ -2,9 +2,6 @@ FROM bftsmart/fabric-frontend:x86_64-1.1.1
 
 WORKDIR /etc/bftsmart-orderer/
 
-ADD ./temp/sampleconfig/msp/signcerts/peer.pem /etc/bftsmart-orderer/config/cert.pem
-ADD ./temp/sampleconfig/msp/keystore/key.pem /etc/bftsmart-orderer/config/key.pem
-
 RUN echo "#!/bin/bash" > startWorkload.sh
 RUN echo "java -DWORKLOAD_CLIENT_ID=\$1 -cp bin/orderingservice.jar:lib/* bft.test.WorkloadClient \$@" >> startWorkload.sh
 

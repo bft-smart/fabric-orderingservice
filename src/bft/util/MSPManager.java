@@ -166,11 +166,11 @@ public class MSPManager {
             BFTException ex = evaluate(deduplicate(channel, signedData), used, channel, timestamp);
             if (ex != null) {
                 
-                logger.info("Evaluatinon of policy " + getPath() + " failed: " + ex.getLocalizedMessage());
+                logger.info("Evaluation of policy " + getPath() + " failed: " + ex.getLocalizedMessage());
                 throw ex;
             }
             
-            logger.info("Evaluatinon of policy " + getPath() + " succeeded");
+            logger.info("Evaluation of policy " + getPath() + " succeeded");
             
         }
         

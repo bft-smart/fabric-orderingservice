@@ -7,10 +7,12 @@ package bft;
 
 import bft.util.ProxyReplyListener;
 import bft.util.BFTCommon;
+import bft.util.ECDSAKeyLoader;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
+import bftsmart.tom.util.KeyLoader;
 import com.etsy.net.JUDS;
 import com.etsy.net.UnixDomainSocket;
 import com.etsy.net.UnixDomainSocketServer;
@@ -24,6 +26,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Security;
+import java.security.cert.CertificateException;
+import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
@@ -32,12 +39,17 @@ import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.hyperledger.fabric.protos.common.Common;
 import org.hyperledger.fabric.protos.common.Configtx;
 import org.hyperledger.fabric.protos.orderer.Configuration;
+import org.hyperledger.fabric.sdk.exception.CryptoException;
+import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
+import org.hyperledger.fabric.sdk.helper.Config;
+import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 
 /**
  *
@@ -62,6 +74,7 @@ public class BFTProxy {
         
     private static Logger logger;
     private static String configDir;
+    private static CryptoPrimitives crypto;
     
     //measurements
     private static final int interval = 10000;
@@ -72,7 +85,7 @@ public class BFTProxy {
     private static final int countBlocks = 0;
     private static final int countSigs = 0;
 
-    public static void main(String args[]) {
+    public static void main(String args[]) throws ClassNotFoundException, IllegalAccessException, InstantiationException, CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException {
 
         if(args.length < 3) {
             System.out.println("Use: java bft.BFTProxy <proxy id> <pool size> <send port>");
@@ -83,21 +96,26 @@ public class BFTProxy {
         
         if (System.getProperty("logback.configurationFile") == null)
             System.setProperty("logback.configurationFile", configDir + "logback.xml");
+        
+        Security.addProvider(new BouncyCastleProvider());
                 
         BFTProxy.logger = LoggerFactory.getLogger(BFTProxy.class);
         
         initID = Integer.parseInt(args[0]);
         nextID = initID + 1;
         
-        sysProxy = new ProxyReplyListener(initID, configDir);
+        crypto = new CryptoPrimitives();
+        crypto.init();
+        BFTCommon.init(crypto);
+        
+        ECDSAKeyLoader loader = new ECDSAKeyLoader(initID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
+        sysProxy = new ProxyReplyListener(initID, configDir, loader, Security.getProvider("BC"));
         
         int pool = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);
         
         try {
             
-            BFTCommon.init(null);
-
             logger.info("Creating UNIX socket...");
             
             Path p = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "hlf-pool-"+sendPort+".sock");
@@ -128,7 +146,7 @@ public class BFTProxy {
             BatchTimeout = new TreeMap<>();
                         
             // request latest reply sequence from the ordering nodes
-            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
                                    
             new SenderThread().start();
 
@@ -160,7 +178,7 @@ public class BFTProxy {
             
             }
 
-        } catch (IOException | NoSuchAlgorithmException | NoSuchProviderException e) {
+        } catch (IOException e) {
             
             logger.error("Failed to launch frontend", e);
             System.exit(1);
@@ -255,7 +273,29 @@ public class BFTProxy {
             this.id = id;
             this.recv = recv;
             this.input = new DataInputStream(this.recv.getInputStream());
-            this.out = new AsynchServiceProxy(this.id, configDir);
+                        
+            this.out = new AsynchServiceProxy(this.id, configDir, new KeyLoader() {
+                @Override
+                public PublicKey loadPublicKey(int i) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, CertificateException {
+                    return null;
+                }
+
+                @Override
+                public PublicKey loadPublicKey() throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, CertificateException {
+                    return null;
+                }
+
+                @Override
+                public PrivateKey loadPrivateKey() throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+                    return null;
+                }
+
+                @Override
+                public String getSignatureAlgorithm() {
+                    return null;
+                }
+                
+            }, Security.getProvider("BC"));
             
         }
         
@@ -402,7 +442,7 @@ public class BFTProxy {
         public void run() {
             
             try {
-                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getRSAPrivateKey(), "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
+                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
                 sysProxy.cleanAsynchRequest(reqId);
                 
                 Timer timer = new Timer();

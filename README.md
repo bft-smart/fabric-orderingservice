@@ -236,7 +236,7 @@ After creating the genesis block, edit the  `./hyperledger-bftmart/config/hosts.
 7001 127.0.0.1 11100
 ```
 
-Next, edit the `./hyperledger-bftmart/config/node.config` file so that the `CERTIFICATE` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/signcerts/peer.pem` file and that the `PRIVKEY` parameter is set to the absolute path of the `./fabric/sampleconfig/msp/keystore/key.pem` file. Following this, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
+Next, enter the main directory for this repository and execute the `startReplica.sh` script in 4 different terminals as follows:
 
 ```
 ./startReplica.sh 0

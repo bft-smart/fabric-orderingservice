@@ -39,16 +39,13 @@ function main () {
 
 	fi
 
+	if [ ! -d $dir/keys ]; then
+		cp -r ../config/keys $dir/
+
+	fi
+
 	if [ ! -f $dir/genesisblock ]; then
 		docker cp $id:/etc/bftsmart-orderer/config/genesisblock $dir
-	fi
-
-	if [ ! -f $dir/cert.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/cert.pem $dir
-	fi
-
-	if [ ! -f $dir/key.pem ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/key.pem $dir
 	fi
 
 	docker rm -v $id > /dev/null

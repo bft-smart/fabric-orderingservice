@@ -6,18 +6,24 @@
 package bft.test;
 
 import bft.util.BFTCommon;
+import bft.util.ECDSAKeyLoader;
 import bft.util.ProxyReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
+import bftsmart.tom.util.KeyLoader;
 import com.google.protobuf.ByteString;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
@@ -27,9 +33,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.LineIterator;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.fabric.protos.common.Common;
 import org.hyperledger.fabric.protos.msp.Identities;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
+import org.hyperledger.fabric.sdk.helper.Config;
 import org.hyperledger.fabric.sdk.security.CryptoPrimitives;
 
 import org.slf4j.Logger;
@@ -85,6 +93,8 @@ public class WorkloadClient {
         if (System.getProperty("logback.configurationFile") == null)
             System.setProperty("logback.configurationFile", configDir + "logback.xml");
         
+        Security.addProvider(new BouncyCastleProvider());
+        
         logger = LoggerFactory.getLogger(WorkloadClient.class);
         loggerLatency = LoggerFactory.getLogger("latency");
                 
@@ -101,13 +111,13 @@ public class WorkloadClient {
         delay = Integer.parseInt(args[6]);
         
         loadConfig();
-
         
+       
         timestamps = new ConcurrentHashMap<>(); 
         
         if (proxy != null) {
             
-            int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getRSAPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
             proxy.cleanAsynchRequest(reqId);
             new ProxyThread().start();
         }
@@ -122,7 +132,7 @@ public class WorkloadClient {
         
     }
     
-    private static void loadConfig() throws IOException, CertificateException {
+    private static void loadConfig() throws IOException, CertificateException, NoSuchAlgorithmException, InvalidKeySpecException {
         
         LineIterator it = FileUtils.lineIterator(new File(WorkloadClient.configDir + "node.config"), "UTF-8");
         
@@ -143,9 +153,11 @@ public class WorkloadClient {
         
         it.close();
         
+        ECDSAKeyLoader loader = new ECDSAKeyLoader(frontendID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
+        
         mspid = configs.get("MSPID");
-        privKey = BFTCommon.getPemPrivateKey(configs.get("PRIVKEY"));
-        certificate = BFTCommon.getCertificate(configs.get("CERTIFICATE"));
+        privKey = loader.loadPrivateKey();
+        certificate = loader.loadCertificate();
         serializedCert = BFTCommon.getSerializedCertificate(certificate);
         ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);
         
@@ -155,7 +167,7 @@ public class WorkloadClient {
         for (int o : recvs) {
             if (o == frontendID) {
                 
-                proxy = new ProxyReplyListener(frontendID, configDir);
+                proxy = new ProxyReplyListener(frontendID, configDir, loader, Security.getProvider("BC"));
                 
                 break;
             }
@@ -172,7 +184,29 @@ public class WorkloadClient {
         
         public WorkerThread (int id) {
             this.id = id;
-            this.worker = new AsynchServiceProxy(this.id, configDir);
+            
+            this.worker = new AsynchServiceProxy(this.id, configDir, new KeyLoader() {
+                @Override
+                public PublicKey loadPublicKey(int i) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, CertificateException {
+                    return null;
+                }
+
+                @Override
+                public PublicKey loadPublicKey() throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, CertificateException {
+                    return null;
+                }
+
+                @Override
+                public PrivateKey loadPrivateKey() throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+                    return null;
+                }
+
+                @Override
+                public String getSignatureAlgorithm() {
+                    return null;
+                }
+                
+            }, Security.getProvider("BC"));            
             this.count = 0;            
         }
 

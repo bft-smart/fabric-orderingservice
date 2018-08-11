@@ -8,6 +8,7 @@ package bft;
 import bft.util.BFTCommon;
 import bft.util.MSPManager;
 import bft.util.BlockCutter;
+import bft.util.ECDSAKeyLoader;
 import bftsmart.reconfiguration.util.TOMConfiguration;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
@@ -35,6 +36,7 @@ import java.security.Security;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -124,20 +126,26 @@ public class BFTNode extends DefaultRecoverable {
     private Set<Integer> receivers;
 
     
-    public BFTNode(int id) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException, CertificateException {
+    public BFTNode(int id) throws IOException, InvalidArgumentException, CryptoException, NoSuchAlgorithmException, NoSuchProviderException, InterruptedException, ClassNotFoundException, IllegalAccessException, InstantiationException, CertificateException, InvalidKeySpecException {
 
         this.replicaLock = new ReentrantLock();
         this.replicaReady = replicaLock.newCondition();
 
         this.id = id;
         
-        this.replicaConf = new TOMConfiguration(this.id, this.configDir);
-
-        loadConfig();
-                
         this.crypto = new CryptoPrimitives();
         this.crypto.init();
         BFTCommon.init(crypto);
+        
+        ECDSAKeyLoader loader = new ECDSAKeyLoader(this.id, this.configDir, this.crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
+        this.replicaConf = new TOMConfiguration(this.id, this.configDir, loader, Security.getProvider("BC"));
+        
+        loadConfig();
+
+        privKey = loader.loadPrivateKey();
+        certificate = loader.loadCertificate();
+        serializedCert = BFTCommon.getSerializedCertificate(certificate);
+        ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);        
         
         this.logger = LoggerFactory.getLogger(BFTNode.class);
         this.loggerThroughput = LoggerFactory.getLogger("throughput");
@@ -179,8 +187,7 @@ public class BFTNode extends DefaultRecoverable {
                     }
                 }
 
-            }
-        );
+            }, loader, Security.getProvider("BC"));
                 
         this.replicaLock.lock();
         this.replicaReady.signalAll();
@@ -210,10 +217,6 @@ public class BFTNode extends DefaultRecoverable {
         it.close();
         
         mspid = configs.get("MSPID");
-        privKey = BFTCommon.getPemPrivateKey(configs.get("PRIVKEY"));
-        certificate = BFTCommon.getCertificate(configs.get("CERTIFICATE"));
-        serializedCert = BFTCommon.getSerializedCertificate(certificate);
-        ident = BFTCommon.getSerializedIdentity(mspid, serializedCert);
         parallelism = Integer.parseInt(configs.get("PARELLELISM"));
         blocksPerThread = Integer.parseInt(configs.get("BLOCKS_PER_THREAD"));
         bothSigs = Boolean.parseBoolean(configs.get("BOTH_SIGS"));
@@ -496,7 +499,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 BFTCommon.RequestTuple tuple = BFTCommon.deserializeSignedRequest(command);
                 if (!BFTCommon.verifyFrontendSignature(msgCtx.getSender(),
-                        replicaConf.getRSAPublicKey(id), tuple)) return new byte[0];
+                        replicaConf.getPublicKey(id), tuple)) return new byte[0];
 
                 if (tuple.type.equals("GETSVIEW")) {
 

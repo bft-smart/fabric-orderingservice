@@ -10,9 +10,11 @@ import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
+import bftsmart.tom.util.KeyLoader;
 import bftsmart.tom.util.TOMUtil;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.Provider;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -60,9 +62,14 @@ public class ProxyReplyListener extends AsynchServiceProxy {
         init();
     }
     
+    public ProxyReplyListener(int id, String configHome, KeyLoader loader, Provider provider) {
+        super(id, configHome, loader, provider);
+        init();
+    }
+    
     public ProxyReplyListener(int id, String configHome,
-            Comparator<byte[]> replyComparator, Extractor replyExtractor) {
-        super(id, configHome, replyComparator, replyExtractor);
+            Comparator<byte[]> replyComparator, Extractor replyExtractor, KeyLoader loader, Provider provider) {
+        super(id, configHome, replyComparator, replyExtractor, loader, provider);
         init();
     }
     
@@ -299,7 +306,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             public void run() {
 
                 try {
-                    invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getRSAPrivateKey(), "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
+                    invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getPrivateKey(), "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
                             null, TOMMessageType.ORDERED_REQUEST);
                 } catch (IOException ex) {
                     logger.error("Failed to send GETVIEW request to nodes", ex);
