@@ -8,6 +8,7 @@ package bft.test;
 import bft.util.BFTCommon;
 import bft.util.ECDSAKeyLoader;
 import bft.util.ProxyReplyListener;
+import bftsmart.communication.client.ReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
@@ -117,7 +118,8 @@ public class WorkloadClient {
         
         if (proxy != null) {
             
-            int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            int reqId = proxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(proxy.getViewManager().getStaticConf().getPrivateKey(),
+                    frontendID,  "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
             proxy.cleanAsynchRequest(reqId);
             new ProxyThread().start();
         }
@@ -270,7 +272,7 @@ public class WorkloadClient {
                         
                         timestamps.put(hash, System.currentTimeMillis());
                         
-                        this.worker.invokeAsynchRequest(BFTCommon.serializeRequest("REGULAR", channelID, req), new bftsmart.communication.client.ReplyListener(){
+                        this.worker.invokeAsynchRequest(BFTCommon.serializeRequest(this.id, "REGULAR", channelID, req), new ReplyListener(){
 
                             private int replies = 0;
 

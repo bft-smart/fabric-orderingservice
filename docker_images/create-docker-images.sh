@@ -72,7 +72,7 @@ function main() {
 
 	docker-compose build  --build-arg SYS_CHAN_NAME=$1 fabric
 
-	docker create --name="fabric-temp" "bftsmart/fabric"
+	docker create --name="fabric-temp" "bftsmart/fabric:x86_64-1.1.1"
 	id=$(docker ps -aqf "name=fabric-temp")
 
 	docker cp $id:/go/src/github.com/hyperledger/fabric/sampleconfig ./temp

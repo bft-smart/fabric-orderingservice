@@ -125,13 +125,15 @@ public class BFTCommon {
     
     public class RequestTuple {
 
+        public int id = -1;
         public String type = null;
         public String channelID = null;
         public byte[] payload = null;
         public byte[] signature = null;
 
-        private RequestTuple(String type, String channelID, byte[] payload, byte[] signature) {
+        private RequestTuple(int id, String type, String channelID, byte[] payload, byte[] signature) {
 
+            this.id = id;
             this.type = type;
             this.channelID = channelID;
             this.payload = payload;
@@ -155,10 +157,10 @@ public class BFTCommon {
         }
     }
     
-    public static RequestTuple getRequestTuple(String type, String channelID, byte[] payload, byte[] signature){
+    public static RequestTuple getRequestTuple(int id, String type, String channelID, byte[] payload, byte[] signature){
             
         BFTCommon t = new BFTCommon();
-        RequestTuple r = t.new RequestTuple(type, channelID, payload, signature);
+        RequestTuple r = t.new RequestTuple(id, type, channelID, payload, signature);
         return r;
     }
     
@@ -210,6 +212,7 @@ public class BFTCommon {
         ByteArrayInputStream bis = new ByteArrayInputStream(request);
         DataInput in = new DataInputStream(bis);
         
+        int id = in.readInt();
         String type = in.readUTF();
         String channelID = in.readUTF();
         int l = in.readInt();
@@ -218,7 +221,7 @@ public class BFTCommon {
       
         bis.close();
         
-        return BFTCommon.getRequestTuple(type, channelID, payload, null);
+        return BFTCommon.getRequestTuple(id, type, channelID, payload, null);
         
     }
             
@@ -239,6 +242,7 @@ public class BFTCommon {
         bis = new ByteArrayInputStream(msg);
         in = new DataInputStream(bis);
         
+        int id = in.readInt();
         String type = in.readUTF();
         String channelID = in.readUTF();
         l = in.readInt();
@@ -247,15 +251,16 @@ public class BFTCommon {
       
         bis.close();
         
-        return BFTCommon.getRequestTuple(type, channelID, payload, sig);
+        return BFTCommon.getRequestTuple(id, type, channelID, payload, sig);
         
     }
     
-    public static byte[] serializeRequest(String type, String channelID, byte[] payload) throws IOException {
+    public static byte[] serializeRequest(int id, String type, String channelID, byte[] payload) throws IOException {
             
         ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
         DataOutput out = new DataOutputStream(bos);
 
+        out.writeInt(id);
         out.writeUTF(type);
         out.writeUTF(channelID);
         out.writeInt(payload.length);
@@ -268,11 +273,12 @@ public class BFTCommon {
         return bos.toByteArray();
     }
     
-    public static byte[] assembleSignedRequest(PrivateKey key, String type, String channelID, byte[] payload) throws IOException {
+    public static byte[] assembleSignedRequest(PrivateKey key, int id, String type, String channelID, byte[] payload) throws IOException {
                         
         ByteArrayOutputStream bos = new ByteArrayOutputStream(type.length() + channelID.length() + payload.length);
         DataOutput out = new DataOutputStream(bos);
 
+        out.writeInt(id);
         out.writeUTF(type);
         out.writeUTF(channelID);
         out.writeInt(payload.length);
@@ -535,6 +541,7 @@ public class BFTCommon {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutput out = new DataOutputStream(bos);
             
+            out.writeInt(tuple.id);
             out.writeUTF(tuple.type);
             out.writeUTF(tuple.channelID);
             out.writeInt(tuple.payload.length);

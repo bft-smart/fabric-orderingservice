@@ -8,6 +8,7 @@ package bft;
 import bft.util.ProxyReplyListener;
 import bft.util.BFTCommon;
 import bft.util.ECDSAKeyLoader;
+import bftsmart.communication.client.ReplyListener;
 import bftsmart.tom.AsynchServiceProxy;
 import bftsmart.tom.RequestContext;
 import bftsmart.tom.core.messages.TOMMessage;
@@ -67,7 +68,7 @@ public class BFTProxy {
     private static Map<String, Timer> timers;
 
     private static Map<String, Long> BatchTimeout;
-    private static int initID;
+    private static int frontendID;
     private static int nextID;
 
     private static ProxyReplyListener sysProxy;
@@ -101,15 +102,15 @@ public class BFTProxy {
                 
         BFTProxy.logger = LoggerFactory.getLogger(BFTProxy.class);
         
-        initID = Integer.parseInt(args[0]);
-        nextID = initID + 1;
+        frontendID = Integer.parseInt(args[0]);
+        nextID = frontendID + 1;
         
         crypto = new CryptoPrimitives();
         crypto.init();
         BFTCommon.init(crypto);
         
-        ECDSAKeyLoader loader = new ECDSAKeyLoader(initID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
-        sysProxy = new ProxyReplyListener(initID, configDir, loader, Security.getProvider("BC"));
+        ECDSAKeyLoader loader = new ECDSAKeyLoader(frontendID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
+        sysProxy = new ProxyReplyListener(frontendID, configDir, loader, Security.getProvider("BC"));
         
         int pool = Integer.parseInt(args[1]);
         int sendPort = Integer.parseInt(args[2]);
@@ -146,7 +147,7 @@ public class BFTProxy {
             BatchTimeout = new TreeMap<>();
                         
             // request latest reply sequence from the ordering nodes
-            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
+            sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "SEQUENCE", "", new byte[]{}), null, TOMMessageType.ORDERED_REQUEST);
                                    
             new SenderThread().start();
 
@@ -301,7 +302,7 @@ public class BFTProxy {
         
         public void run() {
             
-            String id;
+            String channelID;
             boolean isConfig;
             byte[] env; 
             while (true) {
@@ -309,15 +310,15 @@ public class BFTProxy {
 
                 try {
                     
-                    id = readString(this.input);
+                    channelID = readString(this.input);
                     isConfig = readBoolean(this.input);
                     env = readBytes(this.input);
                                 
-                    resetTimer(id);
+                    resetTimer(channelID);
 
-                    logger.debug("Received envelope" + Arrays.toString(env) + " for channel id " + id + (isConfig ? " (type config)" : " (type normal)"));
+                    logger.debug("Received envelope" + Arrays.toString(env) + " for channel id " + channelID + (isConfig ? " (type config)" : " (type normal)"));
 
-                    this.out.invokeAsynchRequest(BFTCommon.serializeRequest((isConfig ? "CONFIG" : "REGULAR"), id, env), new bftsmart.communication.client.ReplyListener(){
+                    this.out.invokeAsynchRequest(BFTCommon.serializeRequest(this.id, (isConfig ? "CONFIG" : "REGULAR"), channelID, env), new ReplyListener(){
 
                         private int replies = 0;
 
@@ -442,7 +443,7 @@ public class BFTProxy {
         public void run() {
             
             try {
-                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
+                int reqId = sysProxy.invokeAsynchRequest(BFTCommon.assembleSignedRequest(sysProxy.getViewManager().getStaticConf().getPrivateKey(), frontendID, "TIMEOUT", this.channel,new byte[0]), null, TOMMessageType.ORDERED_REQUEST);
                 sysProxy.cleanAsynchRequest(reqId);
                 
                 Timer timer = new Timer();

@@ -34,6 +34,8 @@ import org.hyperledger.fabric.protos.common.Common;
  */
 public class ProxyReplyListener extends AsynchServiceProxy {
 
+    private int id;
+    
     private Map<Integer, BFTCommon.ReplyTuple[]> replies;
     private Map<Integer, Entry<String, Common.Block>> responses;
     private Comparator<BFTCommon.ReplyTuple> comparator;
@@ -54,22 +56,26 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             
     public ProxyReplyListener(int id) {
         super(id);
+        this.id = id;
         init();
     }
     
     public ProxyReplyListener(int id, String configHome) {
         super(id, configHome);
+        this.id = id;
         init();
     }
     
     public ProxyReplyListener(int id, String configHome, KeyLoader loader, Provider provider) {
         super(id, configHome, loader, provider);
+        this.id = id;
         init();
     }
     
     public ProxyReplyListener(int id, String configHome,
             Comparator<byte[]> replyComparator, Extractor replyExtractor, KeyLoader loader, Provider provider) {
         super(id, configHome, replyComparator, replyExtractor, loader, provider);
+        this.id = id;
         init();
     }
     
@@ -306,7 +312,7 @@ public class ProxyReplyListener extends AsynchServiceProxy {
             public void run() {
 
                 try {
-                    invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getPrivateKey(), "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
+                    invokeAsynchRequest(BFTCommon.assembleSignedRequest(getViewManager().getStaticConf().getPrivateKey(), id, "GETVIEW", "", new byte[0]), getViewManager().getCurrentViewProcesses(),
                             null, TOMMessageType.ORDERED_REQUEST);
                 } catch (IOException ex) {
                     logger.error("Failed to send GETVIEW request to nodes", ex);
