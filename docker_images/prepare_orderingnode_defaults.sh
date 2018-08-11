@@ -18,29 +18,31 @@ function main () {
 	    mkdir $dir
 	fi
 
-	if [ ! -f $dir/hosts.config ]; then
-		cp ../config/hosts.config $dir
+	if [ ! -d $dir/config ]; then
+	    mkdir $dir/config
+	fi
 
+	if [ ! -f $dir/hosts.config ]; then
+		docker cp $id:/etc/bftsmart-orderer/config/hosts.config $dir/config
 	fi
 
 
 	if [ ! -f $dir/system.config ]; then
-		cp ../config/system.config $dir
-
+		docker cp $id:/etc/bftsmart-orderer/config/system.config $dir/config
 	fi
 
 	if [ ! -f $dir/node.config ]; then
-		cp ../config/node.config $dir
+		docker cp $id:/etc/bftsmart-orderer/config/node.config $dir/config
 
 	fi
 
 	if [ ! -f $dir/logback.xml ]; then
-		cp ../config/logback.xml $dir
+		docker cp $id:/etc/bftsmart-orderer/config/logback.xml $dir/config
 
 	fi
 
 	if [ ! -d $dir/keys ]; then
-		cp -r ../config/keys $dir/
+		docker cp $id:/etc/bftsmart-orderer/config/keys $dir/config/
 
 	fi
 

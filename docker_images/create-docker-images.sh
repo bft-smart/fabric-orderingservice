@@ -568,6 +568,7 @@ Orderer: &OrdererDefaults
     # NOTE: In the solo case, this should be a one-item list.
     Addresses:
         - bft.frontend.1000:7050
+        - bft.frontend.2000:7050
 
     # Batch Timeout: The amount of time to wait before creating a batch.
     BatchTimeout: 2s

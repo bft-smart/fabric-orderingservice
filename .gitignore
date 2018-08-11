@@ -6,3 +6,4 @@ docker_images/orderingnode_material
 docker_images/frontend_material
 docker_images/peer_material
 docker_images/cli_material
+docker_images/workload_material

@@ -2,17 +2,17 @@
 
 function main () {
 
-	dir=./frontend_material
+	dir=./workload_material
 
 	if [ ! -z $1 ]; then
 
 		dir=$1	
 	fi
 
-	docker pull bftsmart/fabric-frontend:x86_64-1.1.1
+	docker pull bftsmart/fabric-workload:x86_64-1.1.1
 
-	docker create --name="frontend-temp" "bftsmart/fabric-frontend:x86_64-1.1.1" > /dev/null
-	id=$(docker ps -aqf "name=frontend-temp")
+	docker create --name="workload-temp" "bftsmart/fabric-workload:x86_64-1.1.1" > /dev/null
+	id=$(docker ps -aqf "name=workload-temp")
 
 	if [ ! -d $dir ]; then
 	    mkdir $dir
@@ -45,29 +45,6 @@ function main () {
 		docker cp $id:/etc/bftsmart-orderer/config/keys $dir/config/
 
 	fi
-
-	if [ ! -f $dir/genesisblock ]; then
-		docker cp $id:/etc/bftsmart-orderer/config/genesisblock $dir
-	fi
-
-	if [ ! -d $dir/fabric ]; then
-
-		docker cp $id:/etc/hyperledger/fabric/ $dir
-
-		if [ -f $dir/fabric/configtx.yaml ]; then
-
-			rm $dir/fabric/configtx.yaml
-
-		fi
-
-		if [ -f $dir/fabric/core.yaml ]; then
-
-			rm $dir/fabric/core.yaml
-
-		fi
-
-
-	fi	
 
 	docker rm -v $id > /dev/null
 
