@@ -188,11 +188,18 @@ broadcast_msg --server bft.frontend.1000:7050 --channelID channel47 --size <size
 
 Bear in mind that the "transactions" issued by this client are not valid chaincode invocations. They are just random payload meant to generate workload.
   
-Lastly, you can also create new channels as follows:
+You can also create new channels as follows:
 
 ```
 broadcast_config --server bft.frontend.1000:7050 --cmd newChain --chainID <channel ID>
 ```
+
+Alternatively, you can generate workload by using another special program that emulates the Java component of a frontend that injects workload directly to the ordering nodes:
+
+```
+startWorkload.sh <frontend ID> <channel ID> <num workers> <payload size> <txs per worker> <random|unsigned|signed> <delay (ms)>
+```
+
 
 ## Compiling <a name="compiling"/>
 
@@ -330,13 +337,13 @@ Finally, keep in mind that the Go component needs to be in the same host as the 
 
 ## State transfer and reconfiguration <a name="reconfig"/>
 
-Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node. To make that node join the existing group, use a `bftsmart/fabric-reconfig` container as follows:
+Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node. To make that node join the existing group, use the `reconfigure.sh` script from within a `bftsmart/fabric-tools` container as follows:
 
 ```
-docker run -i -t --rm --network=bft_network --name=bft.reconf.7002 bftsmart/fabric-reconfig:x86_64-1.1.1 <node id> <ip address> <port>
+reconfigure.sh <node id> <ip address> <port>
 ```
 
-In order to remove a node from the group, use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the containers that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the `bftsmart/fabric-reconfig` container is also given this file.
+In order to remove a node from the group, use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the containers that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the `bftsmart/fabric-tools` container is also given this file.
 
 ## Limitations <a name="limitations"/>
 

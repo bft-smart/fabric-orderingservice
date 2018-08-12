@@ -67,7 +67,7 @@ public class FabricVMServices extends VMServices  {
             
 
         }else{
-            System.out.println("Usage: java FabricVMServices <path to bftmart config folder> <replica id> [ip address] [port]");
+            System.out.println("Usage: java FabricVMServices <replica id> [ip address] [port]");
             System.out.println("If the ip address and port number are given, the replica will be added to the group, otherwise it will be removed.");
             System.exit(1);
         }

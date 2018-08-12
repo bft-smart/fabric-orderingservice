@@ -32,3 +32,28 @@ WORKDIR src/github.com/hyperledger/fabric/examples/chaincode
 ADD temp/chaincode ./
 
 WORKDIR /
+
+#Uncomment the instructions below to install OpenJRE
+RUN apt-get update
+RUN apt-get -y install openjdk-8-jre
+
+#Uncomment the instructions below to install Oracle JDK 8
+#RUN add-apt-repository ppa:webupd8team/java
+#RUN apt-get update
+#RUN echo "oracle-java8-installer shared/accepted-oracle-license-v1-1 select true" | debconf-set-selections
+#RUN apt-get install -y oracle-java8-installer
+
+ADD temp/config /etc/bftsmart-orderer/config
+ADD temp/lib /etc/bftsmart-orderer/lib
+ADD temp/BFT-Proxy.jar /etc/bftsmart-orderer/bin/orderingservice.jar
+
+RUN echo "#!/bin/bash" > /usr/local/bin/startWorkload.sh
+RUN echo "cd /etc/bftsmart-orderer/" >> /usr/local/bin/startWorkload.sh
+RUN echo "java -DWORKLOAD_CLIENT_ID=\$1 -cp bin/orderingservice.jar:lib/* bft.test.WorkloadClient \$@" >> /usr/local/bin/startWorkload.sh
+
+RUN echo "#!/bin/bash" > /usr/local/bin/reconfigure.sh
+RUN echo "cd /etc/bftsmart-orderer/" >> /usr/local/bin/reconfigure.sh
+RUN echo "java -cp bin/orderingservice.jar:lib/* bft.util.FabricVMServices \$@" >> /usr/local/bin/reconfigure.sh
+
+RUN chmod +x /usr/local/bin/startWorkload.sh
+RUN chmod +x /usr/local/bin/reconfigure.sh

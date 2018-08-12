@@ -47,25 +47,3 @@ services:
 
       context: ./
       dockerfile: Dockerfile-tools
-
-  workload:
-
-    image: bftsmart/fabric-workload:x86_64-1.1.1
-    build:
-
-      context: ./
-      dockerfile: Dockerfile-workload
-
-    depends_on:
-      - common
-
-  reconfig:
-
-    image: bftsmart/fabric-reconfig:x86_64-1.1.1
-    build:
-
-      context: ./
-      dockerfile: Dockerfile-reconf
-
-    depends_on:
-      - common
