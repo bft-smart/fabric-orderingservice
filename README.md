@@ -330,13 +330,13 @@ Finally, keep in mind that the Go component needs to be in the same host as the 
 
 ## State transfer and reconfiguration <a name="reconfig"/>
 
-Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node with the `startReplica.sh` script. To make that node join the existing group, use the `reconfigure.sh` script as follows:
+Each ordering node can be re-started after a crash, as long as the total number of simultaneously crashed nodes do not exceed `f`. Furthermore, it is also possible to change the set of ordering nodes on-the-fly via BFT-SMaRt's reconfiguration protocol. In order to add a node to the group, start it as you would any other node. To make that node join the existing group, use a `bftsmart/fabric-reconfig` container as follows:
 
 ```
-./reconfigure.sh <node id> <ip address> <port>
+docker run -i -t --rm --network=bft_network --name=bft.reconf.7002 bftsmart/fabric-reconfig:x86_64-1.1.1 <node id> <ip address> <port>
 ```
 
-In order to remove a node from the group, use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the hosts that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the host from which the `reconfigure.sh` script is executed is also given this file.
+In order to remove a node from the group, use the same script specifying only the node id. Bear in mind that when doing this in a distributed setting, it is necessary to copy the ``./hyperledger-bftsmart/config/currentView``file into the containers that are about to join the group before anything else is done. This is because this file specifies the set of nodes that comprise the most up-to-date group. You must also make sure that the `bftsmart/fabric-reconfig` container is also given this file.
 
 ## Limitations <a name="limitations"/>
 
