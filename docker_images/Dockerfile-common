@@ -14,6 +14,3 @@ ADD temp/config /etc/bftsmart-orderer/config
 ADD temp/lib /etc/bftsmart-orderer/lib
 ADD temp/BFT-Proxy.jar /etc/bftsmart-orderer/bin/orderingservice.jar
 ADD temp/genesisblock /etc/bftsmart-orderer/config/genesisblock
-
-RUN apt-get autoremove -y
-RUN apt-get clean -y

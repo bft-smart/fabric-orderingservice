@@ -88,7 +88,7 @@ function main() {
 
 	docker rm -v $id
 
-	docker-compose build common orderingnode frontend workload
+	docker-compose build common orderingnode frontend workload reconfig
 
 	create_fabric_core
 	create_update_frontend_entrypoint_script

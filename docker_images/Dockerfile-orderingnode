@@ -1,8 +1,5 @@
 FROM bftsmart/fabric-common:x86_64-1.1.1
 
-RUN apt-get autoremove -y
-RUN apt-get clean -y
-
 WORKDIR /etc/bftsmart-orderer/
 
 RUN echo "#!/bin/bash" > startReplica.sh

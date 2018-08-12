@@ -17,10 +17,6 @@ ADD temp/libunixdomainsocket-linux-x86_64.so /usr/lib/
 
 ENV FABRIC_CFG_PATH=/etc/hyperledger/fabric/
 
-RUN apt-get purge -y git-all build-essential autoconf
-RUN apt-get autoremove -y
-RUN apt-get clean -y
-
 WORKDIR /etc/bftsmart-orderer/
 
 ADD temp/startFrontend.sh ./

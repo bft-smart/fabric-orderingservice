@@ -57,4 +57,15 @@ services:
       dockerfile: Dockerfile-workload
 
     depends_on:
-      - frontend
+      - common
+
+  reconfig:
+
+    image: bftsmart/fabric-reconfig:x86_64-1.1.1
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-reconf
+
+    depends_on:
+      - common
