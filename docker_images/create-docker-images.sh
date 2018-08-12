@@ -92,7 +92,8 @@ function main() {
 
 	create_fabric_core
 	create_update_frontend_entrypoint_script
-	create_exec_demo
+	create_invoke_demo
+	create_query_demo
 
 	docker-compose build tools
 
@@ -138,15 +139,83 @@ main $@
 EOF
 }
 
-function create_exec_demo () {
+function create_query_demo () {
 
-cat > ./temp/exec_demo.sh << 'EOF'
+cat > ./temp/query_demo.sh << 'EOF'
 
 #!/bin/bash
 
-if [ -f /tmp/demo_done ]; then {
+if [ -f /tmp/query_demo ]; then {
 
 	echo "This script already executed!"
+	exit 0
+}
+
+fi
+
+if [ -z $CORE_PEER_ADDRESS ] || [ $CORE_PEER_ADDRESS != bft.peer.1:7051 ]; then {
+
+	echo "Please set \$CORE_PEER_ADDRESS to 'bft.peer.1:7051'"
+	exit 0
+}
+
+fi
+
+echo ""
+echo "Fetching genesis block for channel47"
+echo ""
+
+peer channel fetch 0 ./channel47.block -c channel47 -o bft.frontend.2000:7050
+
+echo ""
+echo "Joining the peer to the channel"
+echo ""
+
+peer channel join -b channel47.block
+
+echo ""
+echo "Waiting 10 seconds for peer to fetch the ledger for channel channel47"
+echo ""
+sleep 10
+
+echo ""
+echo "Installing chaincode at the peer"
+echo ""
+
+peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+
+echo ""
+echo "Querying the chaincode"
+echo ""
+
+peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+
+echo ""
+echo "Done!"
+echo ""
+
+touch /tmp/query_demo
+
+EOF
+}
+
+function create_invoke_demo () {
+
+cat > ./temp/invoke_demo.sh << 'EOF'
+
+#!/bin/bash
+
+if [ -f /tmp/invoke_done ]; then {
+
+	echo "This script already executed!"
+	exit 0
+}
+
+fi
+
+if [ -z $CORE_PEER_ADDRESS ] || [ $CORE_PEER_ADDRESS != bft.peer.0:7051 ]; then {
+
+	echo "Please set \$CORE_PEER_ADDRESS to 'bft.peer.0:7051'"
 	exit 0
 }
 
@@ -173,7 +242,7 @@ echo ""
 peer channel join -b channel47.block
 
 echo ""
-echo "Waiting 10 seconds for peer to fetch the ledger for channel bftchannel"
+echo "Waiting 10 seconds for peer to fetch the ledger for channel channel47"
 echo ""
 sleep 10
 
@@ -216,7 +285,7 @@ echo ""
 echo "Done!"
 echo ""
 
-touch /tmp/demo_done
+touch /tmp/invoke_done
 
 EOF
 }
@@ -1074,7 +1143,7 @@ peer:
     # The endpoint this peer uses to listen for inbound chaincode connections.
     # If this is commented-out, the listen address is selected to be
     # the peer's address (see below) with port 7052
-    # chaincodeListenAddress: 0.0.0.0:7052
+    chaincodeListenAddress: 0.0.0.0:7052
 
     # The endpoint the chaincode for this peer uses to connect to the peer.
     # If this is not specified, the chaincodeListenAddress address is selected.
@@ -1086,7 +1155,7 @@ peer:
     # in the same organization. For peers in other organization, see
     # gossip.externalEndpoint for more info.
     # When used as CLI config, this means the peer's endpoint to interact with
-    address: bft.peer.0:7051
+    address: 0.0.0.0:7051
 
     # Whether the Peer should programmatically determine its address
     # This case is useful for docker containers.

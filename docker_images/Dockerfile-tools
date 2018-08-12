@@ -10,10 +10,12 @@ ADD temp/broadcast_config /usr/local/bin/broadcast_config
 ADD temp/broadcast_msg /usr/local/bin/broadcast_msg
 ADD temp/deliver_stdout /usr/local/bin/deliver_stdout
 ADD temp/update_frontend_entrypoint.sh /usr/local/bin/update_frontend_entrypoint.sh
-ADD temp/exec_demo.sh /usr/local/bin/exec_demo.sh
+ADD temp/invoke_demo.sh /usr/local/bin/invoke_demo.sh
+ADD temp/query_demo.sh /usr/local/bin/query_demo.sh
 
 RUN chmod +x /usr/local/bin/update_frontend_entrypoint.sh
-RUN chmod +x /usr/local/bin/exec_demo.sh
+RUN chmod +x /usr/local/bin/invoke_demo.sh
+RUN chmod +x /usr/local/bin/query_demo.sh
 
 ADD temp/fabric_conf/configtx.yaml /etc/hyperledger/fabric/configtx.yaml
 ADD temp/fabric_conf/core.yaml /etc/hyperledger/fabric/core.yaml

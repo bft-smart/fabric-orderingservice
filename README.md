@@ -38,7 +38,7 @@ Besides the aforementioned dependecies, this service also uses the JUDS library 
 
 ## Quick start <a name="quickstart"/>
 
-You can quickly launch a HLF network, comprised of 4 ordering nodes, 1 frontend, and a single peer by following the steps described bellow. These following instructions - as well as this README in general - assume you have entry-level knowledge of both docker and HLF.
+You can quickly launch a HLF network, comprised of 4 ordering nodes, 2 frontends, and 2 peers by following the steps described bellow. These following instructions - as well as this README in general - assume you have entry-level knowledge of both docker and HLF. This setup uses the default 'SampleOrg' organization across all parties.
 
 ##### 1. Create a new docker network named `bft_network`.
 
@@ -77,42 +77,55 @@ docker run -i -t --rm --network=bft_network --name=bft.node.2 bftsmart/fabric-or
 docker run -i -t --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode:x86_64-1.1.1 3
 ```
 
-Ordering nodes need to be started from the one with the lowest ID to the one with the highest. Once all ordering nodes have outputed `-- Ready to process operations`, the frontend can also start:
+Ordering nodes need to be started from the one with the lowest ID to the one with the highest. Once all ordering nodes have outputed `-- Ready to process operations`, the frontends can also start:
 
 ```
 docker run -i -t --rm --network=bft_network --name=bft.frontend.1000 bftsmart/fabric-frontend:x86_64-1.1.1 1000
+docker run -i -t --rm --network=bft_network --name=bft.frontend.2000 bftsmart/fabric-frontend:x86_64-1.1.1 2000
 ```
 
 
-##### 3. Start the peer.
+##### 3. Start the peers.
 
 At this juncture, we can use the official peer image provided by the Hyperledger project. Moreover, we assume that the docker daemon has its UNIX socket available at `/var/run/docker.socket`, so we will mount a volume in the container at `/var/run/` to give it access to the daemon. This is necessary because peers will perform chaincode execution by creating their own containers to execute their instantiated chaincodes.
 
-* If you have created a network with the bridge driver, this command suffices: `docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1`
+* If you have created a network with the bridge driver, this commands suffices:
+
+```
+docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1
+docker run -i -t --rm --network=bft_network -v /var/run/:/var/run/ --name=bft.peer.1 hyperledger/fabric-peer:x86_64-1.1.1
+```
 
 * If instead you created a swarm network, we first need to deal with an idiosyncrasy that manisfests when using the swarm driver with a peer container. If we used the command above, the peer would be prone to block/timeout its execution when eventually a client tries to instantiate some chaincode. The way we found to avoid this issue, is to first connect the peer's container with the bridge driver and next with the swarm driver:
 
 ```
+#Start bft.peer.0
 docker create -i -t --rm --network=bridge -v /var/run/:/var/run/ --name=bft.peer.0 hyperledger/fabric-peer:x86_64-1.1.1
 docker network connect bft_network bft.peer.0
 docker start -a bft.peer.0
+
+#Start bft.peer.1
+docker create -i -t --rm --network=bridge -v /var/run/:/var/run/ --name=bft.peer.1 hyperledger/fabric-peer:x86_64-1.1.1
+docker network connect bft_network bft.peer.1
+docker start -a bft.peer.1
 ```
 
-##### 4. Create the client.
+##### 4. Create the clients.
 
-For the client, we will instead use the image from our own repository:
+We will create 2 clients, each one configured to contact a different peer as its endpoint. To do this, we will instead use the image from our own repository:
 
 ```
-docker run -i -t --rm --network=bft_network bftsmart/fabric-tools:x86_64-1.1.1
+docker run -i -t --rm --network=bft_network --name=bft.cli.0 -e CORE_PEER_ADDRESS=bft.peer.0:7051 bftsmart/fabric-tools:x86_64-1.1.1
+docker run -i -t --rm --network=bft_network --name=bft.cli.1 -e CORE_PEER_ADDRESS=bft.peer.1:7051 bftsmart/fabric-tools:x86_64-1.1.1
 ```
 
 You can also use the official client image (`hyperledger/fabric-tools:x86_64-1.1.1`), but the one provided by us is already configured for this demontration. More importantly, you will also need to use the `configtxgen` tool provided with this image if you decide to setup another network different than the one configured in our images.
 
-You have now the whole network booted up, using the `SampleOrg` organization provided in the `sampleconfig` directory of the HLF source code for both the client, the peer, and the ordering service.
+You have now the whole network booted up, using the `SampleOrg` organization for both clients, peers, and the ordering service.
 
 ##### 5. Create the artifacts.
 
-Switch to the terminal where you launched fabric-tools. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
+Switch to the terminal where you launched `bft.cli.0`. You should have access to the container's command line. The rest of the commands should be issued from within it. Generate the transactions to create a new channel named "channel47" and to update its anchor peers as follows:
 
 ```
 configtxgen -profile SampleSingleMSPChannel -outputCreateChannelTx channel.tx -channelID channel47
@@ -170,9 +183,45 @@ peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}
 Query Result: 90
 ```
 
-Alternatively to typing all these commands manually, you can simply execute `exec_demo.sh` anywhere within the client's container.
+Alternatively to typing all these commands manually, you can simply execute `invoke_demo.sh` anywhere within `bft.cli.0`'s container.
 
-##### 9. Generate workload.
+##### 9. Observe the result of the invocation at `bft.cli.1`
+
+You can now see how `bft.cli.1` is affected by the invocation issued by `bft.cli.0`. To do so, fetch the genesis block for channel47:
+
+```
+peer channel fetch 0 ./channel47.block -c channel47 -o bft.frontend.2000:7050
+```
+
+Notice that for this client, we decided to contact `bft.frontend.2000` instead of `bft.frontend.1000` to fetch the genesis block.
+
+You can now make peer `bft.peer.1` join channel47:
+
+```
+peer channel join -b channel47.block
+```
+
+After the peer as fetched the ledger from one of the frontends, you can install the chaincode:
+
+```
+peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+```
+
+Notice that since the chaincode is already instantiated at channel47, we do not need to explicitly instantiate it again.
+
+You can now observe the effects of the invocation issue at `bft.cli.0`:
+
+```
+peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 001 Using default escc
+2018-xx-xx xx:xx:xx.xx UTC [chaincodeCmd] checkChaincodeCmdParams -> INFO 002 Using default vscc
+Query Result: 90
+```
+
+Alternatively to typing all these commands manually, you can simply execute `query_demo.sh` anywhere within `bft.cli.1`'s container.
+
+##### 10. Generate workload.
 
 You can also use special test clients to issue workload into the ordering service. To create a client that receives blocks from channel47:
 
