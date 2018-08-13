@@ -1513,8 +1513,7 @@ chaincode:
         name:
 
     # Generic builder environment, suitable for most chaincode types
-    #builder: $(DOCKER_NS)/fabric-ccenv:$(ARCH)-$(PROJECT_VERSION)
-    builder: $(DOCKER_NS)/fabric-ccenv:$(ARCH)-1.1.1
+    builder: $(DOCKER_NS)/fabric-ccenv:$(ARCH)-$(PROJECT_VERSION)
 
     # Enables/disables force pulling of the base docker images (listed below)
     # during user chaincode instantiation.
