@@ -1,4 +1,4 @@
-# BFT ordering service for Hyperledger Fabric v1.1
+## BFT ordering service for Hyperledger Fabric v1.1
 
 This is a Byzantine fault-tolerant (BFT) ordering service for Hyperledger Fabric (HLF) v1.1. This BFT ordering service is a wrapper around [BFT-SMaRt](https://github.com/bft-smart/library), a Java open source BFT library maintained by the LaSIGE research unit at the University of Lisbon. 
 
