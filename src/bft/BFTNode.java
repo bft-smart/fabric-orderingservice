@@ -499,7 +499,7 @@ public class BFTNode extends DefaultRecoverable {
 
                 BFTCommon.RequestTuple tuple = BFTCommon.deserializeSignedRequest(command);
                 if (tuple.id != msgCtx.getSender() || !BFTCommon.verifyFrontendSignature(msgCtx.getSender(),
-                        replicaConf.getPublicKey(id), tuple)) return new byte[0];
+                        replicaConf.getPublicKey(msgCtx.getSender()), tuple)) return new byte[0];
 
                 if (tuple.type.equals("GETSVIEW")) {
 
