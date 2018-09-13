@@ -1,4 +1,4 @@
-FROM hyperledger/fabric-orderer:x86_64-1.1.1
+FROM hyperledger/fabric-orderer:amd64-1.2.0
 
 RUN apt-get update
 RUN apt-get -y install python-software-properties debconf-utils git-all build-essential python-pip python-dev curl libc6-dev-i386 autoconf software-properties-common
@@ -23,7 +23,11 @@ RUN go version
 WORKDIR /go/src/github.com/hyperledger/
 RUN git clone https://github.com/jcs47/fabric.git
 WORKDIR /go/src/github.com/hyperledger/fabric/
+
 RUN pip install --upgrade pip
+
+RUN git checkout release-1.2
+
 RUN devenv/setupUbuntuOnPPC64le.sh
 
 RUN make configtxgen orderer
@@ -41,10 +45,10 @@ ENV FABRIC_CFG_PATH=/go/src/github.com/hyperledger/fabric/sampleconfig
 
 ADD temp/fabric_conf /go/src/github.com/hyperledger/fabric/sampleconfig
 ARG SYS_CHAN_NAME
-RUN build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID $SYS_CHAN_NAME -outputBlock ./genesisblock
+RUN .build/bin/configtxgen -profile SampleSingleMSPBFTsmart -channelID $SYS_CHAN_NAME -outputBlock ./genesisblock
 
-RUN cp /go/src/github.com/hyperledger/fabric/build/bin/orderer /usr/local/bin/orderer
-RUN cp /go/src/github.com/hyperledger/fabric/build/bin/configtxgen /usr/local/bin/configtxgen
+RUN cp /go/src/github.com/hyperledger/fabric/.build/bin/orderer /usr/local/bin/orderer
+RUN cp /go/src/github.com/hyperledger/fabric/.build/bin/configtxgen /usr/local/bin/configtxgen
 
 WORKDIR /
 

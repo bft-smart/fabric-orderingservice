@@ -2,7 +2,7 @@
 
 #tmpname=`mktemp -d -t`
 
-VERSION=x86_64-1.1.1
+VERSION=amd64-1.2.0
 
 function main() {
 
@@ -72,13 +72,13 @@ function main() {
 
 	docker-compose build  --build-arg SYS_CHAN_NAME=$1 fabric
 
-	docker create --name="fabric-temp" "bftsmart/fabric:x86_64-1.1.1"
+	docker create --name="fabric-temp" "bftsmart/fabric:amd64-1.2.0"
 	id=$(docker ps -aqf "name=fabric-temp")
 
 	docker cp $id:/go/src/github.com/hyperledger/fabric/sampleconfig ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/genesisblock ./temp
-	docker cp $id:/go/src/github.com/hyperledger/fabric/build/bin/orderer ./temp
-	docker cp $id:/go/src/github.com/hyperledger/fabric/build/bin/configtxgen ./temp
+	docker cp $id:/go/src/github.com/hyperledger/fabric/.build/bin/orderer ./temp
+	docker cp $id:/go/src/github.com/hyperledger/fabric/.build/bin/configtxgen ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/broadcast_msg/broadcast_msg ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/broadcast_config/broadcast_config ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/deliver_stdout/deliver_stdout ./temp
@@ -182,13 +182,13 @@ echo ""
 echo "Installing chaincode at the peer"
 echo ""
 
-peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+peer chaincode install -n example02 -v 1.2 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
 
 echo ""
 echo "Querying the chaincode"
 echo ""
 
-peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
 
 echo ""
 echo "Done!"
@@ -250,8 +250,8 @@ echo ""
 echo "Installing and instantiating chaincode at the peer"
 echo ""
 
-peer chaincode install -n example02 -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
-peer chaincode instantiate -o bft.frontend.1000:7050 -C channel47 -n example02 -v 1.0 -c '{"Args":["init","a","100","b","200"]}'
+peer chaincode install -n example02 -v 1.2 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode instantiate -o bft.frontend.1000:7050 -C channel47 -n example02 -v 1.2 -c '{"Args":["init","a","100","b","200"]}'
 
 echo ""
 echo "Waiting 10 seconds for peer to receive the new block and instantiate chaincode"
@@ -262,13 +262,13 @@ echo ""
 echo "Querying the chaincode"
 echo ""
 
-peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
 
 echo ""
 echo "Issuing invocation on the chaincode"
 echo ""
 
-peer chaincode invoke -C channel47 -n example02 -v 1.0 -c '{"Args":["invoke","a","b","10"]}'
+peer chaincode invoke -C channel47 -n example02 -c '{"Args":["invoke","a","b","10"]}'
 
 echo ""
 echo "Waiting 10 seconds for peer to receive the new block and update its state"
@@ -279,7 +279,7 @@ echo ""
 echo "Querying the chaincode again"
 echo ""
 
-peer chaincode query -C channel47 -n example02 -v 1.0 -c '{"Args":["query","a"]}'
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
 
 echo ""
 echo "Done!"
@@ -333,254 +333,6 @@ cat > ./temp/fabric_conf/configtx.yaml << 'EOF'
 ---
 ################################################################################
 #
-#   PROFILES
-#
-#   Different configuration profiles may be encoded here to be specified as
-#   parameters to the configtxgen tool. The profiles which specify consortiums
-#   are to be used for generating the orderer genesis block. With the correct
-#   consortium members defined in the orderer genesis block, channel creation
-#   requests may be generated with only the org member names and a consortium
-#   name.
-#
-################################################################################
-Profiles:
-
-    # SampleInsecureSolo defines a configuration which uses the Solo orderer,
-    # contains no MSP definitions, and allows all transactions and channel
-    # creation requests for the consortium SampleConsortium.
-    SampleInsecureSolo:
-        Orderer:
-            <<: *OrdererDefaults
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-
-    # SampleInsecureKafka defines a configuration that differs from the
-    # SampleInsecureSolo one only in that it uses the Kafka-based orderer.
-    SampleInsecureKafka:
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-
-    # JCS: my profile
-    # SampleInsecureBFTsmart defines a configuration that differs from the
-    # SampleInsecureSolo one only in that is uses the Kafka-based orderer.
-    SampleInsecureBFTsmart:
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: bftsmart
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-
-    # SampleDevModeSolo defines a configuration which uses the Solo orderer,
-    # contains the sample MSP as both orderer and consortium member, and
-    # requires only basic membership for admin privileges. It also defines
-    # an Application on the ordering system channel, which should usually
-    # be avoided.
-    SampleDevModeSolo:
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      AdminPrincipal: Role.MEMBER
-
-    # SampleDevModeSoloV1.1 mimics the SampleDevModeSolo definition but
-    # additionally defines the v1.1 only capabilities which do not allow a
-    # mixed v1.0.x v1.1.x network.
-    SampleDevModeSoloV1_1:
-        Capabilities:
-            <<: *ChannelCapabilities
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-            Capabilities:
-                <<: *OrdererCapabilities
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-            Capabilities:
-                <<: *ApplicationCapabilities
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      AdminPrincipal: Role.MEMBER
-
-    # SampleDevModeKafka defines a configuration that differs from the
-    # SampleDevModeSolo one only in that it uses the Kafka-based orderer.
-    SampleDevModeKafka:
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      AdminPrincipal: Role.MEMBER
-
-    # SampleDevModeKafkaV1_1 mimics the SampleDevModeKafka definition but
-    # additionally defines the v1.1 only capabilities which do not allow a
-    # mixed v1.0.x v1.1.x network.
-    SampleDevModeKafkaV1_1:
-        Capabilities:
-            <<: *ChannelCapabilities
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-            Capabilities:
-                <<: *OrdererCapabilities
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  AdminPrincipal: Role.MEMBER
-            Capabilities:
-                <<: *ApplicationCapabilities
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      AdminPrincipal: Role.MEMBER
-
-    # SampleSingleMSPSolo defines a configuration which uses the Solo orderer,
-    # and contains a single MSP definition (the MSP sampleconfig).
-    # The Consortium SampleConsortium has only a single member, SampleOrg.
-    SampleSingleMSPSolo:
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - *SampleOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # JCS: my profile
-    # SampleSingleMSPBFTsmart defines a configuration which uses the Solo orderer,
-    # and contains a single MSP definition (the MSP sampleconfig).
-    # The Consortium SampleConsortium has only a single member, SampleOrg
-    SampleSingleMSPBFTsmart:
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: bftsmart
-            Organizations:
-                - *SampleOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # SampleSingleMSPKafka defines a configuration that differs from the
-    # SampleSingleMSPSolo one only in that it uses the Kafka-based orderer.
-    SampleSingleMSPKafka:
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - *SampleOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # SampleSingleMSPSoloV1_1 mimics the SampleSingleMSPSolo definition but
-    # additionally defines the v1.1 only capabilities which do not allow a
-    # mixed v1.0.x v1.1.x network.
-    SampleSingleMSPSoloV1_1:
-        Capabilities:
-            <<: *ChannelCapabilities
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - *SampleOrg
-            Capabilities:
-                <<: *OrdererCapabilities
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # SampleSingleMSPKafkaV1_1 defines a configuration that differs from the
-    # SampleSingleMSPSoloV1_1 one only in that it uses the Kafka-based orderer.
-    SampleSingleMSPKafkaV1_1:
-        Capabilities:
-            <<: *ChannelCapabilities
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - *SampleOrg
-            Capabilities:
-                <<: *OrdererCapabilities
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # SampleNoConsortium is very similar to SampleInsecureSolo, except it does
-    # not define Consortiums.
-    SampleNoConsortium:
-        Orderer:
-            <<: *OrdererDefaults
-
-    # SampleEmptyInsecureChannel defines a channel with no members and
-    # therefore no access control.
-    SampleEmptyInsecureChannel:
-        Consortium: SampleConsortium
-        Application:
-            Organizations:
-
-    # SampleSingleMSPChannel defines a channel with only the sample org as a
-    # member. It is designed to be used in conjunction with SampleSingleMSPSolo
-    # and SampleSingleMSPKafka orderer profiles.
-    SampleSingleMSPChannel:
-        Consortium: SampleConsortium
-        Application:
-            Organizations:
-                - *SampleOrg
-
-    # SampleSingleMSPChannelV1_1 defines a channel just as
-    # SampleSingleMSPChannel. However, it also defines the capabilities map which
-    # makes this channel incompatible with v1.0.x peers.
-    SampleSingleMSPChannelV1_1:
-        Consortium: SampleConsortium
-        Application:
-            Organizations:
-                - *SampleOrg
-            Capabilities:
-                <<: *ApplicationCapabilities
-
-################################################################################
-#
 #   ORGANIZATIONS
 #
 #   This section defines the organizational identities that can be referenced
@@ -599,16 +351,30 @@ Organizations:
 
         # ID is the key by which this org's MSP definition will be referenced.
         # ID can include alphanumeric characters as well as dots and dashes.
-        ID: DEFAULT
+        ID: SampleOrg
 
         # MSPDir is the filesystem path which contains the MSP configuration.
         MSPDir: msp
 
-        # AdminPrincipal dictates the type of principal used for an
-        # organization's Admins policy. Today, only the values of Role.ADMIN and
-        # Role.MEMBER are accepted, which indicates a principal of role type
-        # ADMIN and role type MEMBER respectively.
-        AdminPrincipal: Role.ADMIN
+        # Policies defines the set of policies at this level of the config tree
+        # For organization policies, their canonical path is usually
+        #   /Channel/<Application|Orderer>/<OrgName>/<PolicyName>
+        Policies: &SampleOrgPolicies
+            Readers:
+                Type: Signature
+                Rule: "OR('SampleOrg.member')"
+                # If your MSP is configured with the new NodeOUs, you might
+                # want to use a more specific rule like the following:
+                # Rule: "OR('SampleOrg.admin', 'SampleOrg.peer', 'SampleOrg.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('SampleOrg.member')"
+                # If your MSP is configured with the new NodeOUs, you might
+                # want to use a more specific rule like the following:
+                # Rule: "OR('SampleOrg.admin', 'SampleOrg.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('SampleOrg.admin')"
 
         # AnchorPeers defines the location of peers which can be used for
         # cross-org gossip communication. Note, this value is only encoded in
@@ -616,6 +382,158 @@ Organizations:
         AnchorPeers:
             - Host: 127.0.0.1
               Port: 7051
+
+################################################################################
+#
+#   CAPABILITIES
+#
+#   This section defines the capabilities of fabric network. This is a new
+#   concept as of v1.1.0 and should not be utilized in mixed networks with
+#   v1.0.x peers and orderers.  Capabilities define features which must be
+#   present in a fabric binary for that binary to safely participate in the
+#   fabric network.  For instance, if a new MSP type is added, newer binaries
+#   might recognize and validate the signatures from this type, while older
+#   binaries without this support would be unable to validate those
+#   transactions.  This could lead to different versions of the fabric binaries
+#   having different world states.  Instead, defining a capability for a channel
+#   informs those binaries without this capability that they must cease
+#   processing transactions until they have been upgraded.  For v1.0.x if any
+#   capabilities are defined (including a map with all capabilities turned off)
+#   then the v1.0.x peer will deliberately crash.
+#
+################################################################################
+Capabilities:
+    # Channel capabilities apply to both the orderers and the peers and must be
+    # supported by both.  Set the value of the capability to true to require it.
+    Channel: &ChannelCapabilities
+        # V1.1 for Channel is a catchall flag for behavior which has been
+        # determined to be desired for all orderers and peers running v1.0.x,
+        # but the modification of which would cause incompatibilities.  Users
+        # should leave this flag set to true.
+        V1_1: true
+
+    # Orderer capabilities apply only to the orderers, and may be safely
+    # manipulated without concern for upgrading peers.  Set the value of the
+    # capability to true to require it.
+    Orderer: &OrdererCapabilities
+        # V1.1 for Order is a catchall flag for behavior which has been
+        # determined to be desired for all orderers running v1.0.x, but the
+        # modification of which  would cause incompatibilities.  Users should
+        # leave this flag set to true.
+        V1_1: true
+
+    # Application capabilities apply only to the peer network, and may be
+    # safely manipulated without concern for upgrading orderers.  Set the value
+    # of the capability to true to require it.
+    Application: &ApplicationCapabilities
+        # V1.2 for Application enables the new non-backwards compatible
+        # features and fixes of fabric v1.2, it implies V1_1.
+        V1_2: true
+        # V1.1 for Application enables the new non-backwards compatible
+        # features and fixes of fabric v1.1 (note, this need not be set if
+        # V1_2 is set).
+        V1_1: false
+
+################################################################################
+#
+#   APPLICATION
+#
+#   This section defines the values to encode into a config transaction or
+#   genesis block for application-related parameters.
+#
+################################################################################
+Application: &ApplicationDefaults
+    ACLs: &ACLsDefault
+        # This section provides defaults for policies for various resources
+        # in the system. These "resources" could be functions on system chaincodes
+        # (e.g., "GetBlockByNumber" on the "qscc" system chaincode) or other resources
+        # (e.g.,who can receive Block events). This section does NOT specify the resource's
+        # definition or API, but just the ACL policy for it.
+        #
+        # User's can override these defaults with their own policy mapping by defining the
+        # mapping under ACLs in their channel definition
+
+        #---Lifecycle System Chaincode (lscc) function to policy mapping for access control---#
+
+        # ACL policy for lscc's "getid" function
+        lscc/ChaincodeExists: /Channel/Application/Readers
+
+        # ACL policy for lscc's "getdepspec" function
+        lscc/GetDeploymentSpec: /Channel/Application/Readers
+
+        # ACL policy for lscc's "getccdata" function
+        lscc/GetChaincodeData: /Channel/Application/Readers
+
+        # ACL Policy for lscc's "getchaincodes" function
+        lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
+
+        #---Query System Chaincode (qscc) function to policy mapping for access control---#
+
+        # ACL policy for qscc's "GetChainInfo" function
+        qscc/GetChainInfo: /Channel/Application/Readers
+
+        # ACL policy for qscc's "GetBlockByNumber" function
+        qscc/GetBlockByNumber: /Channel/Application/Readers
+
+        # ACL policy for qscc's  "GetBlockByHash" function
+        qscc/GetBlockByHash: /Channel/Application/Readers
+
+        # ACL policy for qscc's "GetTransactionByID" function
+        qscc/GetTransactionByID: /Channel/Application/Readers
+
+        # ACL policy for qscc's "GetBlockByTxID" function
+        qscc/GetBlockByTxID: /Channel/Application/Readers
+
+        #---Configuration System Chaincode (cscc) function to policy mapping for access control---#
+
+        # ACL policy for cscc's "GetConfigBlock" function
+        cscc/GetConfigBlock: /Channel/Application/Readers
+
+        # ACL policy for cscc's "GetConfigTree" function
+        cscc/GetConfigTree: /Channel/Application/Readers
+
+        # ACL policy for cscc's "SimulateConfigTreeUpdate" function
+        cscc/SimulateConfigTreeUpdate: /Channel/Application/Readers
+
+        #---Miscellanesous peer function to policy mapping for access control---#
+
+        # ACL policy for invoking chaincodes on peer
+        peer/Propose: /Channel/Application/Writers
+
+        # ACL policy for chaincode to chaincode invocation
+        peer/ChaincodeToChaincode: /Channel/Application/Readers
+
+        #---Events resource to policy mapping for access control###---#
+
+        # ACL policy for sending block events
+        event/Block: /Channel/Application/Readers
+
+        # ACL policy for sending filtered block events
+        event/FilteredBlock: /Channel/Application/Readers
+
+    # Organizations lists the orgs participating on the application side of the
+    # network.
+    Organizations:
+
+    # Policies defines the set of policies at this level of the config tree
+    # For Application policies, their canonical path is
+    #   /Channel/Application/<PolicyName>
+    Policies: &ApplicationDefaultPolicies
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+
+    # Capabilities describes the application level capabilities, see the
+    # dedicated Capabilities section elsewhere in this file for a full
+    # description
+    Capabilities:
+        <<: *ApplicationCapabilities
 
 ################################################################################
 #
@@ -630,10 +548,10 @@ Orderer: &OrdererDefaults
     # Orderer Type: The orderer implementation to start.
     # Available types are "solo" and "kafka".
     OrdererType: solo
-    
-    # Addresses here is a nonexhaustive list of orderers the peers and clients can 
-    # connect to. Adding/removing nodes from this list has no impact on their 
-    # participation in ordering. 
+
+    # Addresses here is a nonexhaustive list of orderers the peers and clients can
+    # connect to. Adding/removing nodes from this list has no impact on their
+    # participation in ordering.
     # NOTE: In the solo case, this should be a one-item list.
     Addresses:
         - bft.frontend.1000:7050
@@ -687,85 +605,269 @@ Orderer: &OrdererDefaults
     # network.
     Organizations:
 
+    # Policies defines the set of policies at this level of the config tree
+    # For Orderer policies, their canonical path is
+    #   /Channel/Orderer/<PolicyName>
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        # BlockValidation specifies what signatures must be included in the block
+        # from the orderer for the peer to validate it.
+        BlockValidation:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+
+    # Capabilities describes the orderer level capabilities, see the
+    # dedicated Capabilities section elsewhere in this file for a full
+    # description
+    Capabilities:
+        <<: *OrdererCapabilities
+
 ################################################################################
 #
-#   APPLICATION
+#   CHANNEL
 #
 #   This section defines the values to encode into a config transaction or
-#   genesis block for application-related parameters.
+#   genesis block for channel related parameters.
 #
 ################################################################################
-Application: &ApplicationDefaults
+Channel: &ChannelDefaults
+    # Policies defines the set of policies at this level of the config tree
+    # For Channel policies, their canonical path is
+    #   /Channel/<PolicyName>
+    Policies:
+        # Who may invoke the 'Deliver' API
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        # Who may invoke the 'Broadcast' API
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        # By default, who may modify elements at this config level
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
 
-    # Organizations lists the orgs participating on the application side of the
-    # network.
-    Organizations:
+
+    # Capabilities describes the channel level capabilities, see the
+    # dedicated Capabilities section elsewhere in this file for a full
+    # description
+    Capabilities:
+        <<: *ChannelCapabilities
 
 ################################################################################
 #
-#   CAPABILITIES
+#   PROFILES
 #
-#   This section defines the capabilities of fabric network. This is a new
-#   concept as of v1.1.0 and should not be utilized in mixed networks with
-#   v1.0.x peers and orderers.  Capabilities define features which must be
-#   present in a fabric binary for that binary to safely participate in the
-#   fabric network.  For instance, if a new MSP type is added, newer binaries
-#   might recognize and validate the signatures from this type, while older
-#   binaries without this support would be unable to validate those
-#   transactions.  This could lead to different versions of the fabric binaries
-#   having different world states.  Instead, defining a capability for a channel
-#   informs those binaries without this capability that they must cease
-#   processing transactions until they have been upgraded.  For v1.0.x if any
-#   capabilities are defined (including a map with all capabilities turned off)
-#   then the v1.0.x peer will deliberately crash.
+#   Different configuration profiles may be encoded here to be specified as
+#   parameters to the configtxgen tool. The profiles which specify consortiums
+#   are to be used for generating the orderer genesis block. With the correct
+#   consortium members defined in the orderer genesis block, channel creation
+#   requests may be generated with only the org member names and a consortium
+#   name.
 #
 ################################################################################
-Capabilities:
-    # Channel capabilities apply to both the orderers and the peers and must be
-    # supported by both.  Set the value of the capability to true to require it.
-    Channel: &ChannelCapabilities
-        # V1.1 for Channel is a catchall flag for behavior which has been
-        # determined to be desired for all orderers and peers running v1.0.x,
-        # but the modification of which would cause incompatibilities.  Users
-        # should leave this flag set to true.
-        V1_1: true
+Profiles:
 
-    # Orderer capabilities apply only to the orderers, and may be safely
-    # manipulated without concern for upgrading peers.  Set the value of the
-    # capability to true to require it.
-    Orderer: &OrdererCapabilities
-        # V1.1 for Order is a catchall flag for behavior which has been
-        # determined to be desired for all orderers running v1.0.x, but the
-        # modification of which  would cause incompatibilities.  Users should
-        # leave this flag set to true.
-        V1_1: true
+    # SampleSingleMSPSolo defines a configuration which uses the Solo orderer,
+    # and contains a single MSP definition (the MSP sampleconfig).
+    # The Consortium SampleConsortium has only a single member, SampleOrg.
+    SampleSingleMSPSolo:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *SampleOrg
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - *SampleOrg
 
-    # Application capabilities apply only to the peer network, and may be
-    # safely manipulated without concern for upgrading orderers.  Set the value
-    # of the capability to true to require it.
-    Application: &ApplicationCapabilities
-        # V1.1 for Application is a catchall flag for behavior which has been
-        # determined to be desired for all peers running v1.0.x, but the
-        # modification of which would cause incompatibilities.  Users should
-        # leave this flag set to true.
-        V1_1: true
-        # V1_1_PVTDATA_EXPERIMENTAL is an Application capability to enable the
-        # private data capability.  It is only supported when using peers built
-        # with experimental build tag.  When set to true, private data
-        # collections can be configured upon chaincode instantiation and
-        # utilized within chaincode Invokes.
-        # NOTE: Use of this feature with non "experimental" binaries on the
-        # network may cause a fork.
-        V1_1_PVTDATA_EXPERIMENTAL: false
-        # V1_1_RESOURCETREE_EXPERIMENTAL is an Application capability to enable
-        # the resources capability. Currently this is needed for defining
-        # resource-based access control (RBAC). RBAC helps set fine-grained
-        # access control on system resources such as the endorser and various
-        # system chaincodes. Default is v1.0-based access control based on
-        # CHANNEL_READERS and CHANNEL_WRITERS.
-        # NOTE: Use of this feature with non "experimental" binaries on
-        # the network may cause a fork.
-        V1_1_RESOURCETREE_EXPERIMENTAL: false
+    # SampleSingleMSPKafka defines a configuration that differs from the
+    # SampleSingleMSPSolo one only in that it uses the Kafka-based orderer.
+    SampleSingleMSPKafka:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            OrdererType: kafka
+            Organizations:
+                - *SampleOrg
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - *SampleOrg
+
+    # JCS: my profile
+    # SampleSingleMSPBFTsmart defines a configuration which uses the bftsmart orderer,
+    # and contains a single MSP definition (the MSP sampleconfig).
+    # The Consortium SampleConsortium has only a single member, SampleOrg
+    SampleSingleMSPBFTsmart:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            OrdererType: bftsmart
+            Organizations:
+                - *SampleOrg
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - *SampleOrg
+
+    # SampleInsecureSolo defines a configuration which uses the Solo orderer,
+    # contains no MSP definitions, and allows all transactions and channel
+    # creation requests for the consortium SampleConsortium.
+    SampleInsecureSolo:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+
+    # SampleInsecureKafka defines a configuration that differs from the
+    # SampleInsecureSolo one only in that it uses the Kafka-based orderer.
+    SampleInsecureKafka:
+        <<: *ChannelDefaults
+        Orderer:
+            OrdererType: kafka
+            <<: *OrdererDefaults
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+
+    # JCS: my profile
+    # SampleInsecureBFTsmart defines a configuration that differs from the
+    # SampleInsecureSolo one only in that is uses the bftsmart-based orderer.
+    SampleInsecureBFTsmart:
+        <<: *ChannelDefaults
+        Orderer:
+            OrdererType: bftsmart
+            <<: *OrdererDefaults
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+
+    # SampleDevModeSolo defines a configuration which uses the Solo orderer,
+    # contains the sample MSP as both orderer and consortium member, and
+    # requires only basic membership for admin privileges. It also defines
+    # an Application on the ordering system channel, which should usually
+    # be avoided.
+    SampleDevModeSolo:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      Policies:
+                          <<: *SampleOrgPolicies
+                          Admins:
+                              Type: Signature
+                              Rule: "OR('SampleOrg.member')"
+
+    # SampleDevModeKafka defines a configuration that differs from the
+    # SampleDevModeSolo one only in that it uses the Kafka-based orderer.
+    SampleDevModeKafka:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            OrdererType: kafka
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      Policies:
+                          <<: *SampleOrgPolicies
+                          Admins:
+                              Type: Signature
+                              Rule: "OR('SampleOrg.member')"
+
+    # JCS: my profile
+    # SampleDevModeBFTsmart defines a configuration that differs from the
+    # SampleDevModeSolo one only in that it uses the bftsmart-based orderer.
+    SampleDevModeKafka:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            OrdererType: bftsmart
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      Policies:
+                          <<: *SampleOrgPolicies
+                          Admins:
+                              Type: Signature
+                              Rule: "OR('SampleOrg.member')"
+
+    # SampleSingleMSPChannel defines a channel with only the sample org as a
+    # member. It is designed to be used in conjunction with SampleSingleMSPSolo
+    # and SampleSingleMSPKafka orderer profiles.   Note, for channel creation
+    # profiles, only the 'Application' section and consortium # name are
+    # considered.
+    SampleSingleMSPChannel:
+        Consortium: SampleConsortium
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *SampleOrg
 
 EOF
 }
@@ -860,8 +962,8 @@ General:
     # manager. IMPORTANT: The local MSP ID of an orderer needs to match the MSP
     # ID of one of the organizations defined in the orderer system channel's
     # /Channel/Orderer configuration. The sample organization defined in the
-    # sample configuration provided has an MSP ID of "DEFAULT".
-    LocalMSPID: DEFAULT
+    # sample configuration provided has an MSP ID of "SampleOrg".
+    LocalMSPID: SampleOrg
 
     # Enable an HTTP service for Go "pprof" profiling as documented at:
     # https://golang.org/pkg/net/http/pprof
@@ -1143,7 +1245,7 @@ peer:
     # The endpoint this peer uses to listen for inbound chaincode connections.
     # If this is commented-out, the listen address is selected to be
     # the peer's address (see below) with port 7052
-    chaincodeListenAddress: 0.0.0.0:7052
+    # chaincodeListenAddress: 0.0.0.0:7052
 
     # The endpoint the chaincode for this peer uses to connect to the peer.
     # If this is not specified, the chaincodeListenAddress address is selected.
@@ -1234,6 +1336,7 @@ peer:
         # Number of peers selected to push messages to
         propagatePeerNum: 3
         # Determines frequency of pull phases(unit: second)
+        # Must be greater than digestWaitTime + responseWaitTime
         pullInterval: 4s
         # Number of peers to pull from
         pullPeerNum: 3
@@ -1256,9 +1359,11 @@ peer:
         # Buffer size of sending messages
         sendBuffSize: 200
         # Time to wait before pull engine processes incoming digests (unit: second)
+        # Should be slightly smaller than requestWaitTime
         digestWaitTime: 1s
-        # Time to wait before pull engine removes incoming nonce (unit: second)
-        requestWaitTime: 1s
+        # Time to wait before pull engine removes incoming nonce (unit: milliseconds)
+        # Should be slightly bigger than digestWaitTime
+        requestWaitTime: 1500ms
         # Time to wait before pull engine ends pull (unit: second)
         responseWaitTime: 2s
         # Alive check interval(unit: second)
@@ -1294,6 +1399,12 @@ peer:
             # pushAckTimeout is the maximum time to wait for an acknowledgement from each peer
             # at private data push at endorsement time.
             pushAckTimeout: 3s
+            # Block to live pulling margin, used as a buffer
+            # to prevent peer from trying to pull private data
+            # from peers that is soon to be purged in next N blocks.
+            # This helps a newly joined peer catch up to current
+            # blockchain height quicker.
+            btlPullMargin: 10
 
     # EventHub related configuration
     events:
@@ -1303,10 +1414,10 @@ peer:
         # total number of events that could be buffered without blocking send
         buffersize: 100
 
-        # timeout duration for producer to send an event.
-        # if < 0, if buffer full, unblocks immediately and not send
-        # if 0, if buffer full, will block and guarantee the event will be sent out
-        # if > 0, if buffer full, blocks till timeout
+        # timeout configures how long to block when attempting to add an event to a full buffer:
+        #   when timeout < 0 then discard the event and continue
+        #   when timeout = 0 then block until event is added to the buffer
+        #   when timeout > 0 then block and discard the event if the timeout expires
         timeout: 10ms
 
         # timewindow is the acceptable difference between the peer's current
@@ -1319,6 +1430,9 @@ peer:
             # can send keepalive pings.  If clients send pings more frequently,
             # the events server will disconnect them
             minInterval: 60s
+
+        # the timeout to send events over the GRPC stream to clients
+        sendTimeout: 60s
 
     # TLS Settings
     # Note that peer-chaincode connections through chaincodeListenAddress is
@@ -1369,6 +1483,7 @@ peer:
     # library to use
     BCCSP:
         Default: SW
+        # Settings for the SW crypto provider (i.e. when DEFAULT: SW)
         SW:
             # TODO: The default Hash and Security level needs refactoring to be
             # fully configurable. Changing these defaults requires coordination
@@ -1378,7 +1493,18 @@ peer:
             # Location of Key Store
             FileKeyStore:
                 # If "", defaults to 'mspConfigPath'/keystore
-                # TODO: Ensure this is read with fabric/core/config.GetPath() once ready
+                KeyStore:
+        # Settings for the PKCS#11 crypto provider (i.e. when DEFAULT: PKCS11)
+        PKCS11:
+            # Location of the PKCS11 module library
+            Library:
+            # Token Label
+            Label:
+            # User PIN
+            Pin:
+            Hash:
+            Security:
+            FileKeyStore:
                 KeyStore:
 
     # Path on the file system where peer will find MSP local configurations
@@ -1391,13 +1517,24 @@ peer:
     # to match the name of one of the MSPs in each of the channel
     # that this peer is a member of. Otherwise this peer's messages
     # will not be identified as valid by other nodes.
-    localMspId: DEFAULT
+    localMspId: SampleOrg
+
+    # CLI common client config options
+    client:
+        # connection timeout
+        connTimeout: 3s
 
     # Delivery service related config
     deliveryclient:
         # It sets the total time the delivery service may spend in reconnection
         # attempts until its retry logic gives up and returns an error
         reconnectTotalTimeThreshold: 3600s
+
+        # It sets the delivery service <-> ordering service node connection timeout
+        connTimeout: 3s
+
+        # It sets the delivery service maximal delay between consecutive retries
+        reConnectBackoffThreshold: 3600s
 
     # Type for the local MSP - by default it's of type bccsp
     localMspType: bccsp
@@ -1408,10 +1545,21 @@ peer:
         enabled:     false
         listenAddress: 0.0.0.0:6060
 
+    # The admin service is used for administrative operations such as
+    # control over log module severity, etc.
+    # Only peer administrators can use the service.
+    adminService:
+        # The interface and port on which the admin server will listen on.
+        # If this is commented out, or the port number is equal to the port
+        # of the peer listen address - the admin service is attached to the
+        # peer's service (defaults to 7051).
+        #listenAddress: 0.0.0.0:7055
+
     # Handlers defines custom handlers that can filter and mutate
     # objects passing within the peer, such as:
     #   Auth filter - reject or forward proposals from clients
     #   Decorators  - append or mutate the chaincode input passed to the chaincode
+    #   Endorsers   - Custom signing over proposal response payload and its mutation
     # Valid handler definition contains:
     #   - A name which is a factory method name defined in
     #     core/handlers/library/library.go for statically compiled handlers
@@ -1430,6 +1578,15 @@ peer:
     #   -
     #     name: DecoratorTwo
     #     library: /opt/lib/decorator.so
+    # Endorsers are configured as a map that its keys are the endorsement system chaincodes that are being overridden.
+    # Below is an example that overrides the default ESCC and uses an endorsement plugin that has the same functionality
+    # as the default ESCC.
+    # If the 'library' property is missing, the name is used as the constructor method in the builtin library similar
+    # to auth filters and decorators.
+    # endorsers:
+    #   escc:
+    #     name: DefaultESCC
+    #     library: /etc/hyperledger/fabric/plugin/escc.so
     handlers:
         authFilters:
           -
@@ -1439,7 +1596,16 @@ peer:
         decorators:
           -
             name: DefaultDecorator
+        endorsers:
+          escc:
+            name: DefaultEndorsement
+            library:
+        validators:
+          vscc:
+            name: DefaultValidation
+            library:
 
+    #    library: /etc/hyperledger/fabric/plugin/escc.so
     # Number of goroutines that will execute transaction validation in parallel.
     # By default, the peer chooses the number of CPUs on the machine. Set this
     # variable to override that choice.
@@ -1447,6 +1613,21 @@ peer:
     # the peer so please change this value only if you know what you're doing
     validatorPoolSize:
 
+    # The discovery service is used by clients to query information about peers,
+    # such as - which peers have joined a certain channel, what is the latest
+    # channel config, and most importantly - given a chaincode and a channel,
+    # what possible sets of peers satisfy the endorsement policy.
+    discovery:
+        enabled: true
+        # Whether the authentication cache is enabled or not.
+        authCacheEnabled: true
+        # The maximum size of the cache, after which a purge takes place
+        authCacheMaxSize: 1000
+        # The proportion (0 to 1) of entries that remain in the cache after the cache is purged due to overpopulation
+        authCachePurgeRetentionRatio: 0.75
+        # Whether to allow non-admins to perform non channel scoped queries.
+        # When this is false, it means that only peer admins can perform non channel scoped queries.
+        orgMembersAllowedAccess: false
 ###############################################################################
 #
 #    VM section
@@ -1513,7 +1694,7 @@ chaincode:
         name:
 
     # Generic builder environment, suitable for most chaincode types
-    builder: $(DOCKER_NS)/fabric-ccenv:$(ARCH)-$(PROJECT_VERSION)
+    builder: $(DOCKER_NS)/fabric-ccenv:latest
 
     # Enables/disables force pulling of the base docker images (listed below)
     # during user chaincode instantiation.
@@ -1538,7 +1719,7 @@ chaincode:
         # This image is packed with shim layer libraries that are necessary
         # for Java chaincode runtime.
         Dockerfile:  |
-            from $(DOCKER_NS)/fabric-javaenv:$(ARCH)-$(PROJECT_VERSION)
+            from $(DOCKER_NS)/fabric-javaenv:$(ARCH)-1.1.0
 
     node:
         # need node.js engine at runtime, currently available in baseimage
@@ -1691,6 +1872,7 @@ metrics:
 
               # prometheus http server listen address for pull metrics
               listenAddress: 0.0.0.0:8080
+
 EOF
 }
 

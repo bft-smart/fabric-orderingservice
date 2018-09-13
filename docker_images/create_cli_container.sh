@@ -25,9 +25,9 @@ function main () {
 
 	fi
 
-	docker pull bftsmart/fabric-tools
+	docker pull bftsmart/fabric-tools:amd64-1.2.0
 
-	docker create -i -t --name=$my_contianer_name $endpoint "bftsmart/fabric-tools" > /dev/null
+	docker create -i -t --name=$my_contianer_name $endpoint "bftsmart/fabric-tools:amd64-1.2.0" > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	echo ""

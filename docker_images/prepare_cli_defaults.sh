@@ -9,9 +9,9 @@ function main () {
 		dir=$1	
 	fi
 
-	docker pull bftsmart/fabric-tools:x86_64-1.1.1
+	docker pull bftsmart/fabric-tools:amd64-1.2.0
 
-	docker create --name="cli-temp" "bftsmart/fabric-tools:x86_64-1.1.1" > /dev/null
+	docker create --name="cli-temp" "bftsmart/fabric-tools:amd64-1.2.0" > /dev/null
 	id=$(docker ps -aqf "name=cli-temp")
 
 	if [ ! -d $dir ]; then

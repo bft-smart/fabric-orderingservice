@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.logging.Level;
 import org.apache.commons.codec.binary.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -316,7 +317,7 @@ public class MSPManager {
             
             List<X509Certificate> certPath = verifyCertificate(this.certificate,this.msp,timestamp);
             
-            if (MSPs.get(this.msp).getFabricNodeOUs().getEnable()) {
+            if (MSPs.get(this.msp).getFabricNodeOus().getEnable()) {
                             
                 logger.debug("Fetching OU identifiers for identity " + this);
 
@@ -399,7 +400,7 @@ public class MSPManager {
             
             List<X509Certificate> certPath = validate(timestamp);
                                     
-            if (MSPs.get(this.msp).getFabricNodeOUs().getEnable()) {
+            if (MSPs.get(this.msp).getFabricNodeOus().getEnable()) {
             
                 String nodeOUValue = null;
     
@@ -438,7 +439,7 @@ public class MSPManager {
             
             Identity identPrincipal = null;
             try {
-                deserializeIdentity(channel, principal.getPrincipal().toByteArray());
+                identPrincipal = deserializeIdentity(channel, principal.getPrincipal().toByteArray());
             } catch (Exception ex) {
                 
                 throw new BFTCommon.BFTException("Unable to deserialize principal's identity: " + ex.getMessage());
@@ -487,8 +488,91 @@ public class MSPManager {
         
         void satisfiesPrincipal(MspPrincipal.MSPPrincipal principal, long timestamp) throws BFTException {
             
+            MspPrincipal.MSPPrincipal[] principals = collectPrincipals(principal);
+            
+            for (MspPrincipal.MSPPrincipal p : principals) {
+                
+                satisfiesPrincipalInternal(p, timestamp);
+            }
+        }
+        
+        private MspPrincipal.MSPPrincipal[] collectPrincipals(MspPrincipal.MSPPrincipal principal) throws BFTException {
+            
+            switch(principal.getPrincipalClassification()) {
+                
+                case COMBINED:
+                    
+                    try {
+
+                        MspPrincipal.CombinedPrincipal principals = MspPrincipal.CombinedPrincipal.parseFrom(principal.getPrincipal());
+                        
+                        if (principals.getPrincipalsCount() == 0) {
+                            
+                            throw new BFTCommon.BFTException("No principals in CombinedPrincipal");
+                        }
+                        
+                        LinkedList principalsSlice = new LinkedList();
+                        
+                        for (MspPrincipal.MSPPrincipal cp : principals.getPrincipalsList()) {
+                            
+                            MspPrincipal.MSPPrincipal[] internalSlice = collectPrincipals(cp);
+                            principalsSlice.addAll(Arrays.asList(internalSlice));
+                        }
+                        
+                        MspPrincipal.MSPPrincipal[] result = new MspPrincipal.MSPPrincipal[principalsSlice.size()];
+                        principalsSlice.toArray(result);
+                        return result;
+
+                    } catch (InvalidProtocolBufferException ex) {
+
+                        throw new BFTCommon.BFTException("Unable to parse principal: " + ex.getMessage());
+                    }
+                                
+                default:
+                    
+                    return new MspPrincipal.MSPPrincipal[] { principal };
+            }
+        }
+        
+        private void satisfiesPrincipalInternal(MspPrincipal.MSPPrincipal principal, long timestamp) throws BFTException {
+            
             switch (principal.getPrincipalClassification()){
                 
+                
+                case COMBINED:
+                
+                    throw new BFTCommon.BFTException("SatisfiesPrincipalInternal can not be called with a CombinedPrincipal");
+                    
+                case ANONYMITY:
+
+                    try {
+                        
+                        MspPrincipal.MSPIdentityAnonymity anon = MspPrincipal.MSPIdentityAnonymity.parseFrom(principal.getPrincipal());
+                        
+                        switch (anon.getAnonymityType()) {
+                            
+                            case ANONYMOUS:
+                                
+                                throw new BFTCommon.BFTException("Principal is anonymous, but X.509 MSP does not support anonymous identities");
+                                
+                            case NOMINAL:
+                                
+                                //Fabric v1.2 performs no validation in this case, so neither will we
+                                
+                                break;
+                                
+                            default:
+                                
+                                throw new BFTCommon.BFTException("Unknown principal anonymity type: " + anon.getAnonymityType());
+                        }
+                        
+                    } catch (InvalidProtocolBufferException ex) {
+                        
+                        throw new BFTCommon.BFTException("Unable to parse principal: " + ex.getMessage());
+                    }
+            
+                    break;
+                    
                 case ROLE:
                     
                     MspPrincipal.MSPRole mspRole = null;
@@ -836,19 +920,19 @@ public class MSPManager {
 
                 }
 
-                if (msp.getFabricNodeOUs().getEnable()) {
+                if (msp.getFabricNodeOus().getEnable()) {
 
                     logger.debug("Verifying client OUs for channel " + channelID + " and MSP " + msp.getName());
                     
-                    X509Certificate cert = BFTCommon.getCertificate(msp.getFabricNodeOUs().getClientOUIdentifier().getCertificate().toByteArray());
+                    X509Certificate cert = BFTCommon.getCertificate(msp.getFabricNodeOus().getClientOuIdentifier().getCertificate().toByteArray());
                     this.clientOUs.put(msp.getName(), new OUIdentifier(this.getCertifiersIdentifier(msp.getName(), cert, timestamp), 
-                            msp.getFabricNodeOUs().getClientOUIdentifier().getOrganizationalUnitIdentifier()));
+                            msp.getFabricNodeOus().getClientOuIdentifier().getOrganizationalUnitIdentifier()));
 
                     logger.debug("Verifying peer OUs for channel " + channelID + " and MSP " + msp.getName());
                     
-                    cert = BFTCommon.getCertificate(msp.getFabricNodeOUs().getPeerOUIdentifier().getCertificate().toByteArray());
+                    cert = BFTCommon.getCertificate(msp.getFabricNodeOus().getPeerOuIdentifier().getCertificate().toByteArray());
                     this.peerOUs.put(msp.getName(), new OUIdentifier(this.getCertifiersIdentifier(msp.getName(), cert, timestamp), 
-                            msp.getFabricNodeOUs().getPeerOUIdentifier().getOrganizationalUnitIdentifier()));
+                            msp.getFabricNodeOus().getPeerOuIdentifier().getOrganizationalUnitIdentifier()));
 
                 }
 
@@ -1413,20 +1497,20 @@ public class MSPManager {
         };
         
     }
-    private Policy generateSignaturePolicy(String channel, Policies.SignaturePolicy rule, List<MspPrincipal.MSPPrincipal> identities, String path, String name) throws BFTCommon.BFTException {
+    private Policy generateSignaturePolicy(String channel, Policies.SignaturePolicy policy, List<MspPrincipal.MSPPrincipal> identities, String path, String name) throws BFTCommon.BFTException {
                 
         
         Policy result = null;
-        
-        switch(rule.getTypeCase()) {
+                
+        switch(policy.getTypeCase()) {
             
             case N_OUT_OF:
             
-                Policy[] pols = new Policy[rule.getNOutOf().getRulesCount()];
+                Policy[] pols = new Policy[policy.getNOutOf().getRulesCount()];
                 
                 for (int i = 0; i < pols.length; i++) {
                     
-                    Policies.SignaturePolicy p = rule.getNOutOf().getRules(i);
+                    Policies.SignaturePolicy p = policy.getNOutOf().getRules(i);
                     pols[i] = generateSignaturePolicy(channel, p, identities, path, name);
                 }
                 
@@ -1459,9 +1543,9 @@ public class MSPManager {
                             
                         }
                         
-                        boolean result = verified < rule.getNOutOf().getN();
-                        String msg = ( result ? "Not enough signature policies satisfied for " + getPath() + ". (Needed "+ rule.getNOutOf().getN() + " got "+ verified  + ")" : 
-                            " Enough signature policies satisfied for "+ getPath() +" (completed " + verified + " out of a minimum of " + rule.getNOutOf().getN() + ")");
+                        boolean result = verified < policy.getNOutOf().getN();
+                        String msg = ( result ? "Not enough signature policies satisfied for " + getPath() + ". (Needed "+ policy.getNOutOf().getN() + " got "+ verified  + ")" : 
+                            " Enough signature policies satisfied for "+ getPath() +" (completed " + verified + " out of a minimum of " + policy.getNOutOf().getN() + ")");
                
                         logger.debug(msg);
                         
@@ -1484,12 +1568,12 @@ public class MSPManager {
                 break;
             case SIGNED_BY:
                 
-                if (rule.getSignedBy() < 0 || rule.getSignedBy() >= identities.size()) {
+                if (policy.getSignedBy() < 0 || policy.getSignedBy() >= identities.size()) {
                     
-			throw new BFTCommon.BFTException("Identity index out of range, requested " + rule.getSignedBy() + ", but identies length is " + identities.size());
+			throw new BFTCommon.BFTException("Identity index out of range, requested " + policy.getSignedBy() + ", but identies length is " + identities.size());
 		}
                 
-		MspPrincipal.MSPPrincipal signedByID = identities.get(rule.getSignedBy());
+		MspPrincipal.MSPPrincipal signedByID = identities.get(policy.getSignedBy());
                 
                 result = new Policy() {
                     
@@ -1978,7 +2062,6 @@ public class MSPManager {
         Configtx.Config.Builder newConf = Configtx.Config.newBuilder();
         newConf.setChannelGroup(channelGroup);
         newConf.setSequence(sequence);
-        newConf.setType(oldConf.getType());
         
         return newConf.build();
     }

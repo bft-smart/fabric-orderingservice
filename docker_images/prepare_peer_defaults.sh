@@ -9,9 +9,9 @@ function main () {
 		dir=$1	
 	fi
 
-	docker pull hyperledger/fabric-peer:x86_64-1.1.1
+	docker pull hyperledger/fabric-peer:amd64-1.2.0
 
-	docker create --name="peer-temp" "hyperledger/fabric-peer:x86_64-1.1.1" > /dev/null
+	docker create --name="peer-temp" "hyperledger/fabric-peer:amd64-1.2.0" > /dev/null
 	id=$(docker ps -aqf "name=peer-temp")
 
 	if [ ! -d $dir ]; then

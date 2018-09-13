@@ -4,7 +4,7 @@ services:
 
   frontend:
 
-    image: bftsmart/fabric-frontend:x86_64-1.1.1
+    image: bftsmart/fabric-frontend:amd64-1.2.0
     build:
 
       context: ./
@@ -15,7 +15,7 @@ services:
 
   orderingnode:
 
-    image: bftsmart/fabric-orderingnode:x86_64-1.1.1
+    image: bftsmart/fabric-orderingnode:amd64-1.2.0
     build:
 
       context: ./
@@ -26,7 +26,7 @@ services:
 
   fabric:
 
-    image: bftsmart/fabric:x86_64-1.1.1
+    image: bftsmart/fabric:amd64-1.2.0
     build:
 
       context: ./
@@ -34,7 +34,7 @@ services:
 
   common:
 
-    image: bftsmart/fabric-common:x86_64-1.1.1
+    image: bftsmart/fabric-common:amd64-1.2.0
     build:
 
       context: ./
@@ -42,7 +42,7 @@ services:
 
   tools:
 
-    image: bftsmart/fabric-tools:x86_64-1.1.1
+    image: bftsmart/fabric-tools:amd64-1.2.0
     build:
 
       context: ./
