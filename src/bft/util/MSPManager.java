@@ -438,7 +438,7 @@ public class MSPManager {
             
             Identity identPrincipal = null;
             try {
-                deserializeIdentity(channel, principal.getPrincipal().toByteArray());
+                identPrincipal = deserializeIdentity(channel, principal.getPrincipal().toByteArray());
             } catch (Exception ex) {
                 
                 throw new BFTCommon.BFTException("Unable to deserialize principal's identity: " + ex.getMessage());
