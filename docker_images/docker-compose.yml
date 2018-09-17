@@ -32,6 +32,14 @@ services:
       context: ./
       dockerfile: Dockerfile-fabric
 
+  peer:
+
+    image: bftsmart/fabric-peer:amd64-1.2.0
+    build:
+
+      context: ./
+      dockerfile: Dockerfile-peer
+
   common:
 
     image: bftsmart/fabric-common:amd64-1.2.0

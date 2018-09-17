@@ -30,7 +30,7 @@ RUN git checkout release-1.2
 
 RUN devenv/setupUbuntuOnPPC64le.sh
 
-RUN make configtxgen orderer
+RUN make configtxgen orderer peer
 
 WORKDIR /go/src/github.com/hyperledger/fabric/orderer/sample_clients/broadcast_msg/
 RUN go build

@@ -722,7 +722,7 @@ public class BFTNode extends DefaultRecoverable {
                     //The fabric codebase inserts the lastupdate structure into a signed envelope. I cannot do this here because the signatures
                     //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
                     //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
-                    //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
+                    //My solution was to simply not sign the envelope. At least until Fabric v1.2, the codebase seems to accept unsigned envelopes.
                     Common.Envelope newEnvelope = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), ByteString.EMPTY, Common.HeaderType.CONFIG, 0, channel, 0, 
                             msgCtx.getTimestamp());
                     
@@ -751,7 +751,7 @@ public class BFTNode extends DefaultRecoverable {
                     //The fabric codebase inserts the lastupdate structure into a signed envelope. We cannot do this here because the signatures
                     //are different for each replica, thus producing different blocks. Even if I modified the frontend to be aware of this corner
                     //case just like it is done for block signatures, envelopes are supposed to contain only one signature rather than a set of them.
-                    //My solution was to simply not sign the envelope. At least until Fabric v1.1, the codebase seems to accept unsigned envelopes.
+                    //My solution was to simply not sign the envelope. At least until Fabric v1.2, the codebase seems to accept unsigned envelopes.
                     Common.Envelope envelopeClone = BFTCommon.makeUnsignedEnvelope(newConfEnv.toByteString(), ByteString.EMPTY, Common.HeaderType.CONFIG, 0, confUpdate.getChannelId(), 0, 
                             msgCtx.getTimestamp());
                     

@@ -1,0 +1,5 @@
+FROM hyperledger/fabric-peer:amd64-1.2.0
+
+WORKDIR /
+
+ADD temp/peer /usr/local/bin/peer

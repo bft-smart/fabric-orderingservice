@@ -79,6 +79,7 @@ function main() {
 	docker cp $id:/go/src/github.com/hyperledger/fabric/genesisblock ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/.build/bin/orderer ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/.build/bin/configtxgen ./temp
+	docker cp $id:/go/src/github.com/hyperledger/fabric/.build/bin/peer ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/broadcast_msg/broadcast_msg ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/broadcast_config/broadcast_config ./temp
 	docker cp $id:/go/src/github.com/hyperledger/fabric/orderer/sample_clients/deliver_stdout/deliver_stdout ./temp
@@ -88,7 +89,7 @@ function main() {
 
 	docker rm -v $id
 
-	docker-compose build common orderingnode frontend
+	docker-compose build common orderingnode frontend peer
 
 	create_fabric_core
 	create_update_frontend_entrypoint_script
