@@ -915,19 +915,19 @@ public class BFTNode extends DefaultRecoverable {
                         //create signatures
                         Common.Metadata blockSig = BFTCommon.createMetadataSignature(privKey, ident.toByteArray(), tuple.msgContext.getNonces(), null, tuple.block.getHeader());
                         Common.Metadata configSig = null;
-        
+                        
+                        Common.LastConfig.Builder last = Common.LastConfig.newBuilder();
+                            last.setIndex(tuple.clonedManager.getLastConfig(tuple.channelID));
+                            
                         if (bothSigs) {
                             
-                            Common.LastConfig.Builder last = Common.LastConfig.newBuilder();
-                            last.setIndex(tuple.clonedManager.getLastConfig(tuple.channelID));
-                        
                             configSig = BFTCommon.createMetadataSignature(privKey, ident.toByteArray(), tuple.msgContext.getNonces(), last.build().toByteArray(), tuple.block.getHeader());
                         } else {
                             
-                            Common.MetadataSignature.Builder dummySig = 
+                              Common.MetadataSignature.Builder dummySig = 
                                     Common.MetadataSignature.newBuilder().setSignature(ByteString.EMPTY).setSignatureHeader(ByteString.EMPTY);
                             
-                            configSig = Common.Metadata.newBuilder().setValue(ByteString.EMPTY).addSignatures(dummySig).build();
+                            configSig = Common.Metadata.newBuilder().setValue(last.build().toByteString()).addSignatures(dummySig).build();
                             
                         }
                         countBlocks++;
