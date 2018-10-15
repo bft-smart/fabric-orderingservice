@@ -40,6 +40,7 @@ import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,12 +87,19 @@ public class BFTProxy {
     private static final int countBlocks = 0;
     private static final int countSigs = 0;
 
-    public static void main(String args[]) throws ClassNotFoundException, IllegalAccessException, InstantiationException, CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException {
+    public static void main(String args[]) throws ClassNotFoundException, IllegalAccessException, InstantiationException, CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, IOException {
 
         if(args.length < 3) {
             System.out.println("Use: java bft.BFTProxy <proxy id> <pool size> <send port>");
             System.exit(-1);
-        }    
+        }
+        
+        int pool = Integer.parseInt(args[1]);
+        int sendPort = Integer.parseInt(args[2]);
+        
+        Path proxy_ready = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "hlf-proxy-"+sendPort+".ready");
+        
+         Files.deleteIfExists(proxy_ready);
         
         configDir = BFTCommon.getBFTSMaRtConfigDir("FRONTEND_CONFIG_DIR");
         
@@ -112,9 +120,6 @@ public class BFTProxy {
         ECDSAKeyLoader loader = new ECDSAKeyLoader(frontendID, configDir, crypto.getProperties().getProperty(Config.SIGNATURE_ALGORITHM));
         sysProxy = new ProxyReplyListener(frontendID, configDir, loader, Security.getProvider("BC"));
         
-        int pool = Integer.parseInt(args[1]);
-        int sendPort = Integer.parseInt(args[2]);
-        
         try {
             
             logger.info("Creating UNIX socket...");
@@ -125,6 +130,8 @@ public class BFTProxy {
             
             recvServer = new  UnixDomainSocketServer(p.toString(), JUDS.SOCK_STREAM, pool);
             sendServer = new ServerSocket(sendPort);
+            
+            FileUtils.touch(proxy_ready.toFile()); //Indicate the Go component that the java component is ready
 
             logger.info("Waiting for local connections and parameters...");
             
