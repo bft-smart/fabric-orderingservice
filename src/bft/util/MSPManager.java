@@ -17,7 +17,6 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.security.InvalidKeyException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -36,7 +35,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.logging.Level;
 import org.apache.commons.codec.binary.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -209,49 +207,6 @@ public class MSPManager {
             deduplicated.toArray(result);
             return result;
         }
-    }
-    
-    class OUIdentifier implements Serializable {
-            
-        // CertifiersIdentifier is the hash of certificates chain of trust
-        // related to this organizational unit
-        byte[] certifiersIdentifier;
-
-        // OrganizationUnitIdentifier defines the organizational unit under the
-        // MSP identified with MSPIdentifier
-        String organizationalUnitIdentifier;
-
-        OUIdentifier (byte[] certifiersIdentifier, String organizationalUnitIdentifier) {
-
-            this.certifiersIdentifier = certifiersIdentifier;
-            this.organizationalUnitIdentifier = organizationalUnitIdentifier;
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 7;
-            hash = 31 * hash + this.certifiersIdentifier.hashCode();
-            hash = 31 * hash + this.organizationalUnitIdentifier.hashCode();
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-
-            if (this == o) return true;
-            if (o == null) return false;
-            if (this.getClass() != o.getClass()) return false;
-            OUIdentifier i = (OUIdentifier) o;
-            return this.certifiersIdentifier.equals(i.certifiersIdentifier) && 
-                    this.organizationalUnitIdentifier.equals(i.organizationalUnitIdentifier);
-        }
-
-        @Override
-        public String toString(){
-
-            return "["+ Hex.encodeHexString(this.certifiersIdentifier) + ":" + this.organizationalUnitIdentifier+"]";
-        }
-
     }
     
     class Identity {
