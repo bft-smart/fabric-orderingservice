@@ -5,13 +5,14 @@
  */
 package bft.util;
 
+import java.io.Serializable;
 import org.apache.commons.codec.binary.Hex;
 
 /**
  *
  * @author joao
  */
-class OUIdentifier {
+class OUIdentifier implements Serializable {
             
     // CertifiersIdentifier is the hash of certificates chain of trust
     // related to this organizational unit
