@@ -17,6 +17,7 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.security.InvalidKeyException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -210,7 +211,7 @@ public class MSPManager {
         }
     }
     
-    class OUIdentifier {
+    class OUIdentifier implements Serializable {
             
         // CertifiersIdentifier is the hash of certificates chain of trust
         // related to this organizational unit
