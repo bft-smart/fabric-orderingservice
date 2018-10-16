@@ -18,7 +18,7 @@ function main () {
 
 	my_contianer_name=$1
 
-	docker pull hyperledger/fabric-peer:amd64-1.2.0
+	docker pull hyperledger/fabric-peer:amd64-1.3.0
 
 	eval $(parse_yaml ./peer_material/fabric/core.yaml "core_")
 
@@ -42,7 +42,7 @@ function main () {
 	#echo "Port to listen on: $port"
 
 
-	docker create -i -t -p $port:$port --name=$my_contianer_name -v /var/run/:/var/run/ "hyperledger/fabric-peer:amd64-1.2.0" > /dev/null
+	docker create -i -t -p $port:$port --name=$my_contianer_name -v /var/run/:/var/run/ "hyperledger/fabric-peer:amd64-1.3.0" > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	docker cp ./peer_material/fabric $id:/etc/hyperledger/fabric/

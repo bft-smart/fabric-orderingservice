@@ -1,4 +1,4 @@
-FROM bftsmart/fabric-common:amd64-1.2.0
+FROM bftsmart/fabric-common:amd64-1.3.0
 
 RUN apt-get -y install libltdl7
 

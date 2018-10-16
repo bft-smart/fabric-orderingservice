@@ -2,7 +2,7 @@
 
 #tmpname=`mktemp -d -t`
 
-VERSION=amd64-1.2.0
+VERSION=amd64-1.3.0
 
 function main() {
 
@@ -72,7 +72,7 @@ function main() {
 
 	docker-compose build  --build-arg SYS_CHAN_NAME=$1 fabric
 
-	docker create --name="fabric-temp" "bftsmart/fabric:amd64-1.2.0"
+	docker create --name="fabric-temp" "bftsmart/fabric:"$VERSION
 	id=$(docker ps -aqf "name=fabric-temp")
 
 	docker cp $id:/go/src/github.com/hyperledger/fabric/sampleconfig ./temp
@@ -405,34 +405,42 @@ Organizations:
 ################################################################################
 Capabilities:
     # Channel capabilities apply to both the orderers and the peers and must be
-    # supported by both.  Set the value of the capability to true to require it.
+    # supported by both.
+    # Set the value of the capability to true to require it.
     Channel: &ChannelCapabilities
-        # V1.1 for Channel is a catchall flag for behavior which has been
-        # determined to be desired for all orderers and peers running v1.0.x,
-        # but the modification of which would cause incompatibilities.  Users
-        # should leave this flag set to true.
-        V1_1: true
+        # V1.3 for Channel is a catchall flag for behavior which has been
+        # determined to be desired for all orderers and peers running at the v1.3.x
+        # level, but which would be incompatible with orderers and peers from
+        # prior releases.
+        # Prior to enabling V1.3 channel capabilities, ensure that all
+        # orderers and peers on a channel are at v1.3.0 or later.
+        V1_3: true
 
     # Orderer capabilities apply only to the orderers, and may be safely
-    # manipulated without concern for upgrading peers.  Set the value of the
-    # capability to true to require it.
+    # used with prior release peers.
+    # Set the value of the capability to true to require it.
     Orderer: &OrdererCapabilities
-        # V1.1 for Order is a catchall flag for behavior which has been
-        # determined to be desired for all orderers running v1.0.x, but the
-        # modification of which  would cause incompatibilities.  Users should
-        # leave this flag set to true.
+        # V1.1 for Orderer is a catchall flag for behavior which has been
+        # determined to be desired for all orderers running at the v1.1.x
+        # level, but which would be incompatible with orderers from prior releases.
+        # Prior to enabling V1.1 orderer capabilities, ensure that all
+        # orderers on a channel are at v1.1.0 or later.
         V1_1: true
 
-    # Application capabilities apply only to the peer network, and may be
-    # safely manipulated without concern for upgrading orderers.  Set the value
-    # of the capability to true to require it.
+    # Application capabilities apply only to the peer network, and may be safely
+    # used with prior release orderers.
+    # Set the value of the capability to true to require it.
     Application: &ApplicationCapabilities
+        # V1.3 for Application enables the new non-backwards compatible
+        # features and fixes of fabric v1.3.
+        V1_3: true
         # V1.2 for Application enables the new non-backwards compatible
-        # features and fixes of fabric v1.2, it implies V1_1.
-        V1_2: true
+        # features and fixes of fabric v1.2 (note, this need not be set if
+        # later version capabilities are set)
+        V1_2: false
         # V1.1 for Application enables the new non-backwards compatible
         # features and fixes of fabric v1.1 (note, this need not be set if
-        # V1_2 is set).
+        # later version capabilities are set).
         V1_1: false
 
 ################################################################################
@@ -562,22 +570,37 @@ Orderer: &OrdererDefaults
     BatchTimeout: 2s
 
     # Batch Size: Controls the number of messages batched into a block.
+    # The orderer views messages opaquely, but typically, messages may
+    # be considered to be Fabric transactions.  The 'batch' is the group
+    # of messages in the 'data' field of the block.  Blocks will be a few kb
+    # larger than the batch size, when signatures, hashes, and other metadata
+    # is applied.
     BatchSize:
 
         # Max Message Count: The maximum number of messages to permit in a
-        # batch.
+        # batch.  No block will contain more than this number of messages.
         MaxMessageCount: 10
 
         # Absolute Max Bytes: The absolute maximum number of bytes allowed for
-        # the serialized messages in a batch. If the "kafka" OrdererType is
+        # the serialized messages in a batch. The maximum block size is this value
+        # plus the size of the associated metadata (usually a few KB depending
+        # upon the size of the signing identities). Any transaction larger than
+        # this value will be rejected by ordering. If the "kafka" OrdererType is
         # selected, set 'message.max.bytes' and 'replica.fetch.max.bytes' on
         # the Kafka brokers to a value that is larger than this one.
         AbsoluteMaxBytes: 10 MB
 
         # Preferred Max Bytes: The preferred maximum number of bytes allowed
-        # for the serialized messages in a batch. A message larger than the
-        # preferred max bytes will result in a batch larger than preferred max
-        # bytes.
+        # for the serialized messages in a batch. Roughly, this field may be considered
+        # the best effort maximum size of a batch. A batch will fill with messages
+        # until this size is reached (or the max message count, or batch timeout is
+        # exceeded).  If adding a new message to the batch would cause the batch to
+        # exceed the preferred max bytes, then the current batch is closed and written
+        # to a block, and a new batch containing the new message is created.  If a
+        # message larger than the preferred max bytes is received, then its batch
+        # will contain only that message.  Because messages may be larger than
+        # preferred max bytes (up to AbsoluteMaxBytes), some batches may exceed
+        # the preferred max bytes, but will always contain exactly one transaction.
         PreferredMaxBytes: 512 KB
 
     # Max Channels is the maximum number of channels to allow on the ordering
@@ -601,6 +624,27 @@ Orderer: &OrdererDefaults
 
         # RecvPort: The localhost TCP port from which the java component sends blocks to the golang component.
         RecvPort: 9999
+
+    # EtcdRaft defines configuration which must be set when the "etcdraft"
+    # orderertype is chosen.
+    EtcdRaft:
+        # The set of Raft replicas for this network. For the etcd/raft-based
+        # implementation, we expect every replica to also be an OSN. Therefore,
+        # a subset of the host:port items enumerated in this list should be
+        # replicated under the Orderer.Addresses key above.
+        Consenters:
+            - Host: raft0.example.com
+              Port: 7050
+              ClientTLSCert: path/to/ClientTLSCert0
+              ServerTLSCert: path/to/ServerTLSCert0
+            - Host: raft1.example.com
+              Port: 7050
+              ClientTLSCert: path/to/ClientTLSCert1
+              ServerTLSCert: path/to/ServerTLSCert1
+            - Host: raft2.example.com
+              Port: 7050
+              ClientTLSCert: path/to/ClientTLSCert2
+              ServerTLSCert: path/to/ServerTLSCert2
 
     # Organizations lists the orgs participating on the orderer side of the
     # network.
@@ -827,7 +871,7 @@ Profiles:
     # JCS: my profile
     # SampleDevModeBFTsmart defines a configuration that differs from the
     # SampleDevModeSolo one only in that it uses the bftsmart-based orderer.
-    SampleDevModeKafka:
+    SampleDevModeBFTsmart:
         <<: *ChannelDefaults
         Orderer:
             <<: *OrdererDefaults
@@ -869,6 +913,45 @@ Profiles:
             <<: *ApplicationDefaults
             Organizations:
                 - *SampleOrg
+
+    # SampleDevModeEtcdRaft defines a configuration that differs from the
+    # SampleDevModeSolo one only in that it uses the etcd/raft-based orderer.
+    SampleDevModeEtcdRaft:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            OrdererType: etcdraft
+            EtcdRaft:
+                Consenters:
+                    - Host: 127.0.0.1
+                      Port: 7050
+                      ClientTLSCert: etcdraft/tls-client-1.pem
+                      ServerTLSCert: etcdraft/tls-client-1.pem
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      Policies:
+                          <<: *SampleOrgPolicies
+                          Admins:
+                              Type: Signature
+                              Rule: "OR('SampleOrg.member')"
 
 EOF
 }
@@ -947,7 +1030,7 @@ General:
     # GenesisMethod is set to "provisional". See the configtx.yaml file for the
     # descriptions of the available profiles. Ignored if GenesisMethod is set to
     # "file".
-    GenesisProfile: SampleSingleMSPBFTsmart
+    GenesisProfile: SampleInsecureSolo
 
     # Genesis file: The file containing the genesis block to use when
     # initializing the orderer system channel and GenesisMethod is set to
@@ -1089,7 +1172,11 @@ Kafka:
         # https://godoc.org/github.com/Shopify/sarama#Config
         Consumer:
             RetryBackoff: 2s
-
+    # Settings to use when creating Kafka topics.  Only applies when
+    # Kafka.Version is v0.10.1.0 or higher
+    Topic:
+        # The number of Kafka brokers across which to replicate the topic
+        ReplicationFactor: 3
     # Verbose: Enable logging for interactions with the Kafka cluster.
     Verbose: false
 
@@ -1122,6 +1209,15 @@ Kafka:
         # following "File" key and specify the file name from which to load the
         # value of RootCAs.
         #File: path/to/RootCAs
+
+    # SASLPlain: Settings for using SASL/PLAIN authentication with Kafka brokers
+    SASLPlain:
+      # Enabled: Use SASL/PLAIN to authenticate with Kafka brokers
+      Enabled: false
+      # User: Required when Enabled is set to true
+      User:
+      # Password: Required when Enabled is set to true
+      Password:
 
     # Kafka protocol version used to communicate with the Kafka cluster brokers
     # (defaults to 0.10.2.0 if not specified)
@@ -1183,7 +1279,7 @@ logging:
 
     # Valid logging levels are case-insensitive strings chosen from
 
-    #     CRITICAL | ERROR | WARNING | NOTICE | INFO | DEBUG
+    #     FATAL | PANIC | ERROR | WARNING | INFO | DEBUG
 
     # The overall default logging level can be specified in various ways,
     # listed below from strongest to weakest:
@@ -1208,14 +1304,9 @@ logging:
     # The overall default values mentioned above can be overridden for the
     # specific components listed in the override section below.
 
-    # Override levels for various peer modules. These levels will be
-    # applied once the peer has completely started. They are applied at this
-    # time in order to be sure every logger has been registered with the
-    # logging package.
-    # Note: the modules listed below are the only acceptable modules at this
-    #       time.
+    # Override log levels for various peer modules.
     cauthdsl:   warning
-    gossip:     warning
+    gossip:     info
     grpc:       error
     ledger:     info
     msp:        warning
@@ -1406,34 +1497,14 @@ peer:
             # This helps a newly joined peer catch up to current
             # blockchain height quicker.
             btlPullMargin: 10
-
-    # EventHub related configuration
-    events:
-        # The address that the Event service will be enabled on the peer
-        address: 0.0.0.0:7053
-
-        # total number of events that could be buffered without blocking send
-        buffersize: 100
-
-        # timeout configures how long to block when attempting to add an event to a full buffer:
-        #   when timeout < 0 then discard the event and continue
-        #   when timeout = 0 then block until event is added to the buffer
-        #   when timeout > 0 then block and discard the event if the timeout expires
-        timeout: 10ms
-
-        # timewindow is the acceptable difference between the peer's current
-        # time and the client's time as specified in a registration event
-        timewindow: 15m
-
-        # Keepalive settings for peer server and clients
-        keepalive:
-            # MinInterval is the minimum permitted time in seconds which clients
-            # can send keepalive pings.  If clients send pings more frequently,
-            # the events server will disconnect them
-            minInterval: 60s
-
-        # the timeout to send events over the GRPC stream to clients
-        sendTimeout: 60s
+            # the process of reconciliation is done in an endless loop, while in each iteration reconciler tries to
+            # pull from the other peers the most recent missing blocks with a maximum batch size limitation.
+            # reconcileBatchSize determines the maximum batch size of missing private data that will be reconciled in a
+            # single iteration.
+            reconcileBatchSize: 10
+            # reconcileSleepInterval determines the time reconciler sleeps from end of an iteration until the beginning
+            # of the next reconciliation iteration.
+            reconcileSleepInterval: 5m
 
     # TLS Settings
     # Note that peer-chaincode connections through chaincodeListenAddress is
@@ -1719,8 +1790,7 @@ chaincode:
         # tools added for java shim layer packaging.
         # This image is packed with shim layer libraries that are necessary
         # for Java chaincode runtime.
-        Dockerfile:  |
-            from $(DOCKER_NS)/fabric-javaenv:$(ARCH)-1.1.0
+        runtime: $(DOCKER_NS)/fabric-javaenv:$(ARCH)-$(PROJECT_VERSION)
 
     node:
         # need node.js engine at runtime, currently available in baseimage
@@ -1757,6 +1827,7 @@ chaincode:
     # whitelist, add "myscc: enable" to the list below, and register in
     # chaincode/importsysccs.go
     system:
+        +lifecycle: enable
         cscc: enable
         lscc: enable
         escc: enable
@@ -1801,6 +1872,8 @@ ledger:
     # goleveldb - default state database stored in goleveldb.
     # CouchDB - store state database in CouchDB
     stateDatabase: goleveldb
+    # Limit on the number of records to return per query
+    totalQueryLimit: 100000
     couchDBConfig:
        # It is recommended to run CouchDB on the same server as the peer, and
        # not map the CouchDB container port to a server port in docker-compose.
@@ -1817,11 +1890,14 @@ ledger:
        # Number of retries for CouchDB errors
        maxRetries: 3
        # Number of retries for CouchDB errors during peer startup
-       maxRetriesOnStartup: 10
+       maxRetriesOnStartup: 12
        # CouchDB request timeout (unit: duration, e.g. 20s)
        requestTimeout: 35s
-       # Limit on the number of records to return per query
-       queryLimit: 10000
+       # Limit on the number of records per each CouchDB query
+       # Note that chaincode queries are only bound by totalQueryLimit.
+       # Internally the chaincode may execute multiple CouchDB queries,
+       # each of size internalQueryLimit.
+       internalQueryLimit: 1000
        # Limit on the number of records per CouchDB bulk update batch
        maxBatchUpdateSize: 1000
        # Warm indexes after every N blocks.
@@ -1832,6 +1908,10 @@ ledger:
        # Increasing the value may improve write efficiency of peer and CouchDB,
        # but may degrade query response time.
        warmIndexesAfterNBlocks: 1
+       # Create the _global_changes system database
+       # This is optional.  Creating the global changes database will require
+       # additional system resources to track changes and maintain the database
+       createGlobalChangesDB: false
 
   history:
     # enableHistoryDatabase - options are true or false

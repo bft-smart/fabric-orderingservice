@@ -19,7 +19,7 @@ function main() {
 	my_contianer_name=$1
 	my_node_id=$2
 
-	docker pull bftsmart/fabric-orderingnode:amd64-1.2.0
+	docker pull bftsmart/fabric-orderingnode:amd64-1.3.0
 
 	my_port=-1
 	
@@ -57,7 +57,7 @@ function main() {
 
 	#docker-compose build --build-arg prepared_orderingnode
 
-	docker create -i -t -p $my_port:$my_port -p $my_other_port:$my_other_port --name=$my_contianer_name "bftsmart/fabric-orderingnode:amd64-1.2.0" $my_node_id > /dev/null
+	docker create -i -t -p $my_port:$my_port -p $my_other_port:$my_other_port --name=$my_contianer_name "bftsmart/fabric-orderingnode:amd64-1.3.0" $my_node_id > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	docker cp ./orderingnode_material/hosts.config $id:/etc/bftsmart-orderer/config/hosts.config

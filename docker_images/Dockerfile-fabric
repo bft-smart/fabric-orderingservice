@@ -1,4 +1,4 @@
-FROM hyperledger/fabric-orderer:amd64-1.2.0
+FROM hyperledger/fabric-orderer:amd64-1.3.0
 
 RUN apt-get update
 RUN apt-get -y install python-software-properties debconf-utils git-all build-essential python-pip python-dev curl libc6-dev-i386 autoconf software-properties-common
@@ -26,7 +26,7 @@ WORKDIR /go/src/github.com/hyperledger/fabric/
 
 RUN pip install --upgrade pip
 
-RUN git checkout release-1.2
+RUN git checkout release-1.3
 
 RUN devenv/setupUbuntuOnPPC64le.sh
 

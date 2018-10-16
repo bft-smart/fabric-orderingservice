@@ -9,9 +9,9 @@ function main () {
 		dir=$1	
 	fi
 
-	docker pull bftsmart/fabric-tools:amd64-1.2.0
+	docker pull bftsmart/fabric-tools:amd64-1.3.0
 
-	docker create --name="cli-temp" "bftsmart/fabric-tools:amd64-1.2.0" > /dev/null
+	docker create --name="cli-temp" "bftsmart/fabric-tools:amd64-1.3.0" > /dev/null
 	id=$(docker ps -aqf "name=cli-temp")
 
 	if [ ! -d $dir ]; then
@@ -24,7 +24,7 @@ function main () {
 
 		if [ -f $dir/fabric/configtx.yaml ]; then
 
-			rm .$dir/fabric/configtx.yaml
+			rm $dir/fabric/configtx.yaml
 
 		fi
 
@@ -33,6 +33,13 @@ function main () {
 			rm $dir/fabric/orderer.yaml
 
 		fi
+
+		if [ -d $dir/fabric/etcdraft ]; then
+
+			rm -r $dir/fabric/etcdraft/
+
+		fi
+
 	fi
 
 	docker rm -v $id > /dev/null

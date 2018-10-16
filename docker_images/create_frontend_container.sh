@@ -22,13 +22,13 @@ function main () {
 	my_contianer_name=$1
 	my_id=$2
 
-	docker pull bftsmart/fabric-frontend:amd64-1.2.0
+	docker pull bftsmart/fabric-frontend:amd64-1.3.0
 
 	eval $(parse_yaml ./frontend_material/fabric/orderer.yaml "orderer_")
 
 	#echo $orderer_General_ListenPort $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort
 
-	docker create -i -t -p $orderer_General_ListenPort:$orderer_General_ListenPort --name=$my_contianer_name "bftsmart/fabric-frontend:amd64-1.2.0" $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort > /dev/null
+	docker create -i -t -p $orderer_General_ListenPort:$orderer_General_ListenPort --name=$my_contianer_name "bftsmart/fabric-frontend:amd64-1.3.0" $my_id $orderer_BFTsmart_ConnectionPoolSize $orderer_BFTsmart_RecvPort > /dev/null
 	id=$(docker ps -aqf "name=$my_contianer_name")
 
 	docker cp ./frontend_material/hosts.config $id:/etc/bftsmart-orderer/config/hosts.config
