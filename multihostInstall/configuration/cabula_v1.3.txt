@@ -1,0 +1,127 @@
+################### Generate crypto material and genesis block:
+
+../../fabric/.build/bin/cryptogen generate --config=./crypto-config.yaml
+../../fabric/.build/bin/configtxgen -profile BFTGenesis -channelID bftchannel -outputBlock genesisblock
+
+################### Launch nodes:
+
+docker run -i -t --rm --network=bft_network --name=0.node.bft -e NODE_CONFIG_DIR=/bft-config/config/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/node0/:/bft-config/  bftsmart/fabric-orderingnode:amd64-1.3.0 0
+
+docker run -i -t --rm --network=bft_network --name=1.node.bft -e NODE_CONFIG_DIR=/bft-config/config/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/node1/:/bft-config/  bftsmart/fabric-orderingnode:amd64-1.3.0 1
+
+docker run -i -t --rm --network=bft_network --name=2.node.bft -e NODE_CONFIG_DIR=/bft-config/config/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/node2/:/bft-config/  bftsmart/fabric-orderingnode:amd64-1.3.0 2
+
+docker run -i -t --rm --network=bft_network --name=3.node.bft -e NODE_CONFIG_DIR=/bft-config/config/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/node3/:/bft-config/  bftsmart/fabric-orderingnode:amd64-1.3.0 3
+
+################### Launch frontends:
+
+docker run -i -t --rm --network=bft_network --name=1000.frontend.bft -e FRONTEND_CONFIG_DIR=/bft-config/config/ -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/frontend1000/:/bft-config/  bftsmart/fabric-frontend:amd64-1.3.0 1000
+
+docker run -i -t --rm --network=bft_network --name=2000.frontend.bft -e FRONTEND_CONFIG_DIR=/bft-config/config/ -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/frontend2000/:/bft-config/  bftsmart/fabric-frontend:amd64-1.3.0 2000
+
+################### Launch peers:
+
+docker create -i -t --rm --network=bridge --name=0.peer.lasige.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/lasigepeer0/:/bft-config/ -v /var/run/:/var/run/  hyperledger/fabric-peer:amd64-1.3.0
+
+docker create -i -t --rm --network=bridge --name=1.peer.lasige.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/lasigepeer1/:/bft-config/ -v /var/run/:/var/run/ hyperledger/fabric-peer:amd64-1.3.0
+
+docker create -i -t --rm --network=bridge --name=0.peer.ibm.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/ibmpeer0/:/bft-config/ -v /var/run/:/var/run/ hyperledger/fabric-peer:amd64-1.3.0
+
+docker create -i -t --rm --network=bridge --name=1.peer.ibm.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/ibmpeer1/:/bft-config/ -v /var/run/:/var/run/ hyperledger/fabric-peer:amd64-1.3.0
+
+docker network connect bft_network 0.peer.lasige.bft
+
+docker network connect bft_network 1.peer.lasige.bft
+
+docker network connect bft_network 0.peer.ibm.bft
+
+docker network connect bft_network 1.peer.ibm.bft
+
+docker start -a 0.peer.lasige.bft
+
+docker start -a 1.peer.lasige.bft
+
+docker start -a 0.peer.ibm.bft
+
+docker start -a 1.peer.ibm.bft
+
+################### Launch admins:
+
+docker run -i -t --rm --network=bft_network --name=0.admin.lasige.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/lasigeadmin/:/bft-config/ -e CORE_PEER_ADDRESS=0.peer.lasige.bft:7051 bftsmart/fabric-tools:amd64-1.3.0
+
+docker run -i -t --rm --network=bft_network --name=0.cli.lasige.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/lasigecli/:/bft-config/ -e CORE_PEER_ADDRESS=0.peer.lasige.bft:7051 bftsmart/fabric-tools:amd64-1.3.0
+
+docker run -i -t --rm --network=bft_network --name=1.admin.lasige.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/lasigeadmin/:/bft-config/ -e CORE_PEER_ADDRESS=1.peer.lasige.bft:7051 bftsmart/fabric-tools:amd64-1.3.0
+
+docker run -i -t --rm --network=bft_network --name=0.admin.ibm.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/ibmadmin/:/bft-config/ -e CORE_PEER_ADDRESS=0.peer.ibm.bft:7051  bftsmart/fabric-tools:amd64-1.3.0
+
+docker run -i -t --rm --network=bft_network --name=0.cli.ibm.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/ibmcli/:/bft-config/ -e CORE_PEER_ADDRESS=0.peer.ibm.bft:7051  bftsmart/fabric-tools:amd64-1.3.0
+
+docker run -i -t --rm --network=bft_network --name=1.admin.ibm.bft -e FABRIC_CFG_PATH=/bft-config/fabric/ -v /home/joao/gocode/src/github.com/hyperledger/fabric_bft_orgs/v1.2/os-config/ibmadmin/:/bft-config/ -e CORE_PEER_ADDRESS=1.peer.ibm.bft:7051  bftsmart/fabric-tools:amd64-1.3.0
+
+
+################### Commands @ 0.admin.lasige.bft
+
+configtxgen -profile BFTChannel -outputCreateChannelTx channel.tx -channelID channel47
+configtxgen -profile BFTChannel -outputAnchorPeersUpdate anchor.tx -channelID channel47 -asOrg LaSIGE
+
+peer channel create -o 1000.frontend.bft:7050 -c channel47 -f channel.tx
+peer channel update -o 1000.frontend.bft:7050 -c channel47 -f anchor.tx
+
+peer channel join -b channel47.block
+
+peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode instantiate -o 2000.frontend.bft:7050 -C channel47 -n example02 -v 1.3 -c '{"Args":["init","a","100","b","200"]}'
+
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C channel47 -n example02 -c '{"Args":["invoke","a","b","10"]}'
+peer chaincode query -C channel47 -n example02 --c '{"Args":["query","a"]}'
+
+################### Commands @ 0.cli.lasige.bft
+
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C channel47 -n example02 -c '{"Args":["invoke","a","b","10"]}'
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
+
+################### Commands @ 1.admin.lasige.bft
+
+peer channel fetch 0 ./channel47.block -c channel47 -o 2000.frontend.bft:7050
+peer channel join -b channel47.block
+peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C channel47 -n example02 -c '{"Args":["invoke","a","b","10"]}'
+peer chaincode query -C channel47 -n example02 -c '{"Args":["query","a"]}'
+
+
+################### Commands @ 0.admin.ibm.bft
+
+configtxgen -profile BFTChannel -outputCreateChannelTx channel.tx -channelID jcschannel
+configtxgen -profile BFTChannel -outputAnchorPeersUpdate anchor.tx -channelID jcschannel -asOrg IBM
+
+peer channel create -o 2000.frontend.bft:7050 -c jcschannel -f channel.tx
+peer channel update -o 2000.frontend.bft:7050 -c jcschannel -f anchor.tx
+
+peer channel join -b jcschannel.block
+
+peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode instantiate -o 1000.frontend.bft:7050 -C jcschannel -n example02 -v 1.3 -c '{"Args":["init","a","200","b","400"]}'
+
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C jcschannel -n example02 -c '{"Args":["invoke","a","b","-10"]}'
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+
+################### Commands @ 0.cli.ibm.bft
+
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C jcschannel -n example02 -c '{"Args":["invoke","a","b","-10"]}'
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+
+################### Commands @ 1.admin.ibm.bft
+
+peer channel fetch 0 ./jcschannel.block -c jcschannel -o 1000.frontend.bft:7050
+peer channel join -b jcschannel.block
+peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C jcschannel -n example02 -c '{"Args":["invoke","a","b","-10"]}'
+peer chaincode query -C jcschannel -n example02 -c '{"Args":["query","a"]}'
+

@@ -1,0 +1,27 @@
+version: '2'
+
+services:
+  bft.node.2:
+    container_name: bft.node.2
+    hostname: bft.node.2
+    image: bftsmart/fabric-orderingnode
+    working_dir: /etc/bftsmart-orderer
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+    command: "2" 
+    volumes:
+      - /opt/gopath:/opt/gopath
+      - ./config/node2config:/etc/bftsmart-orderer/config
+      - /var/run/:/host/var/run/
+    ports:
+      - 11000:11000
+      - 11001:11001
+      - 11002:11002
+      - 11003:11003
+      - 11004:11004
+      - 11100:11100
+    extra_hosts:
+      - "bft.node.0:10.255.71.37"
+      - "bft.node.1:10.255.71.38"
+      - "bft.node.3:10.255.73.123"

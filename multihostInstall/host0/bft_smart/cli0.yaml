@@ -1,0 +1,23 @@
+version: '2'
+
+services:
+  bft.cli.0:
+    container_name: bft.cli.0
+    hostname: bft.cli.0
+    image: hyperledger/fabric-tools
+    working_dir: /etc/hyperledger/fabric
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_PEER_ADDRESS=bft.peer.0:7051
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+    command: sleep 100000
+    volumes:
+      - /opt/gopath:/opt/gopath
+      - /var/run/:/host/var/run/
+    extra_hosts:
+      - "bft.node.0:10.255.71.37"
+      - "bft.node.1:10.255.71.38"
+      - "bft.node.2:10.255.73.122"
+      - "bft.node.3:10.255.73.123"
+      - "bft.peer.0:10.255.71.37"
+      - "bft.frontend.1000:10.255.71.37"

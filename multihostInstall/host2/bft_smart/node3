@@ -1,0 +1,1 @@
+docker run -itd -h bft.node.3  --ip 10.0.0.113 -p 11003:11000 --rm --network=bft_network --name=bft.node.3 bftsmart/fabric-orderingnode:amd64-1.2.0 3

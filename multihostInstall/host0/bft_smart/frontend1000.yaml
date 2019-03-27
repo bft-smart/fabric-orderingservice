@@ -1,0 +1,18 @@
+version: '2'
+
+services:
+  bft.frontend.1000:
+    container_name: bft.frontend.1000
+    hostname: bft.frontend.1000
+    image: bftsmart/fabric-frontend
+    command: "1000" 
+    ports:
+      - 7050:7050
+    volumes:
+      - ./config/frontend1000config/fabric:/etc/hyperledger/fabric
+      - ./config/frontend1000config/config:/etc/bftsmart-orderer/config
+    extra_hosts:
+      - "bft.node.0:10.255.71.37"
+      - "bft.node.1:10.255.71.38"
+      - "bft.node.2:10.255.73.122"
+      - "bft.node.3:10.255.73.123"

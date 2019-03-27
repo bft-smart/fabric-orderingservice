@@ -1,0 +1,8 @@
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.ibm.bft-cert.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.ibm.bft-cert.pem
+    OrganizationalUnitIdentifier: peer
