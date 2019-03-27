@@ -1,0 +1,14 @@
+#!/bin/bash
+
+function clearContainers () {
+        CONTAINER_IDS=$(docker ps -aq)
+        if [ -z "$CONTAINER_IDS" -o "$CONTAINER_IDS" = " " ]; then
+                echo "---- No containers available for deletion ----"
+        else
+                docker rm -f $CONTAINER_IDS
+        fi
+}
+
+clearContainers
+rm -rf data
+docker ps -a

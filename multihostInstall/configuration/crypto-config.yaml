@@ -1,0 +1,59 @@
+# Multi-organization setup for BFT-SMaRt
+#
+# ---------------------------------------------------------------------------
+# "OrdererOrgs" - Organizations associated with the ordering service
+# ---------------------------------------------------------------------------
+OrdererOrgs:
+
+  # ---------------------------------------------------------------------------
+  # Ordering nodes
+  # ---------------------------------------------------------------------------
+  - Name: OrderingNodes
+
+    Domain: node.bft
+    #Prefix: test
+
+    Template:
+
+      Count: 4
+      Hostname: "{{.Index}}"
+
+  # ---------------------------------------------------------------------------
+  # Frontends
+  # ---------------------------------------------------------------------------
+  - Name: Frontends
+    Domain: frontend.bft
+
+    Specs:
+      - Hostname: 1000
+      - Hostname: 2000
+
+
+# ---------------------------------------------------------------------------
+# "PeerOrgs" - Organizations for the endorsing/comitting peers
+# ---------------------------------------------------------------------------
+PeerOrgs:
+
+  - Name: LaSIGE
+    Domain: lasige.bft
+    EnableNodeOUs: true
+    Template:
+
+      Count: 2
+      Hostname: "{{.Index}}.peer"
+
+    Users:
+      Count: 1
+
+  - Name: IBM
+    Domain: ibm.bft
+    EnableNodeOUs: true
+    Template:
+
+      Count: 2
+      Hostname: "{{.Index}}.peer"
+
+
+    Users:
+      Count: 1
+

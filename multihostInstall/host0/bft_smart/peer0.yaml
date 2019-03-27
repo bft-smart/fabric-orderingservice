@@ -1,0 +1,38 @@
+version: '2'
+
+services:
+  bft.couchdb.0:
+    container_name: bft.couchdb.0
+    image: hyperledger/fabric-couchdb
+    environment:
+      - COUCHDB_USER=
+      - COUCHDB_PASSWORD=
+    volumes:
+      - ./data/bft.couchdb.0:/opt/couchdb/data
+      - ./data/bft.couchdb.0/logs:/opt/couchdb/logs
+    ports:
+      - "5984:5984"
+
+  bft.peer.0:
+    container_name: bft.peer.0
+    hostname: bft.peer.0
+    image: hyperledger/fabric-peer
+    environment:
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=bft.couchdb.0:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+    volumes:
+      - /var/run/:/host/var/run/
+      - ./config/peer0config/fabric:/etc/hyperledger/fabric
+    ports:
+      - 7051:7051
+    depends_on:
+      - bft.couchdb.0
+    extra_hosts:
+      - "bft.node.0:10.255.71.37"
+      - "bft.node.1:10.255.71.38"
+      - "bft.node.2:10.255.71.122"
+      - "bft.node.3:10.255.73.123"
+      - "bft.frontend.1000:10.255.71.37"
