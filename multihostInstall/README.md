@@ -2,11 +2,11 @@
 Bft_smart multihost Install
 
 
-“ª°¢Basic environment installation
+‰∏Ä„ÄÅBasic environment installation
 
-1°¢Install docker 	Version£∫ Docker 17.06.2-ce  or higher
+1„ÄÅInstall docker 	VersionÔºö Docker 17.06.2-ce  or higher
 
-£®1£© premise
+Ôºà1Ôºâ premise
 
   The centos-extras repository in the yum source must be enabled (enable)
 
@@ -20,7 +20,7 @@ Bft_smart multihost Install
 
   It is recommended to use the overlay2 storage driver.
 
-£®2£©Uninstall the old version
+Ôºà2ÔºâUninstall the old version
 
     The old version of docker is called docker or docker-engine, 
 
@@ -30,7 +30,7 @@ Bft_smart multihost Install
 
    The command is as follows:
 
-# yum remove docker \
+yum remove docker \
 docker-client \
 docker-client-latest \
 docker-common \
@@ -41,58 +41,58 @@ docker-selinux \
 docker-engine-selinux \
 docker-engine
 
-# rm -rf /var/lib/docker/
+rm -rf /var/lib/docker/
 
 
 If yum reports "No Packages marked for removal," that's ok.
 Directory /var/lib/docker/ contains images, containers, volumes, and networks, which should be deleted together.
 At this point, docker is completely unloaded.
 
-£®3£©install docker-ce
+Ôºà3Ôºâinstall docker-ce
 
-£®A£©install dependency packages
+ÔºàAÔºâinstall dependency packages
 
 The command is as follows:
 
-# yum install -y yum-utils \
+yum install -y yum-utils \
 device-mapper-persistent-data \
 lvm2
 
-£®B£©set up stable repository
+ÔºàBÔºâset up stable repository
 The command is as follows:
 
-# yum-config-manager \
+yum-config-manager \
 --add-repo \
 https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo 
 
 (C) View the available version of docker-ce
 The command is as follows:
-# yum list docker-ce --showduplicates | sort -r
+yum list docker-ce --showduplicates | sort -r
 
 Install the specified version of docker-ce
 From the above installation list, install docker-ce
 //For example: yum install docker-ce-18.03.0.ce
-# yum install docker-ce-<VERSION STRING>
+yum install docker-ce-<VERSION STRING>
 
 (D) run docker
 The command is as follows:
-# systemctl start docker
+systemctl start docker
 
 (E) View the docker version
 The command is as follows:
-# docker version
+docker version
 
 
-2°¢Install docker-compose   Version£∫ 1.14.0 or higher
+2„ÄÅInstall docker-compose   VersionÔºö 1.14.0 or higher
 
-£®1£©Do the following command to download docker-compose
-#curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+Ôºà1ÔºâDo the following command to download docker-compose
+curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
 
-£®2£©Convert to an executable program
-#chmod +x /usr/local/bin/docker-compose
+Ôºà2ÔºâConvert to an executable program
+chmod +x /usr/local/bin/docker-compose
 
 
-3°¢Install go   Version£∫1.10.x
+3„ÄÅInstall go   VersionÔºö1.10.x
 
 (1) Download installation package
 Need the installation package to download from https://studygolang.com/dl
@@ -100,7 +100,7 @@ Need the installation package to download from https://studygolang.com/dl
 (2) Install go
 
 (A) Unzip go1.8.3.linux-amd64.tar.gz to /usr/local and do the following:
-# tar -C /usr/local -xzf go1.8.3.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.8.3.linux-amd64.tar.gz
 
 (B) Configure the go environment variable to modify the /etc/profile file 
 to make it permanent and effective for all system users.
@@ -112,20 +112,20 @@ export GOPATH=/opt/gopath
 
 The above modification of /etc/profile is implemented as follows:
 
-#cd /etc    
-#vim profile
+cd /etc    
+vim profile
 
 After the modification is executed, continue to execute:
 
-#source profile
+source profile
 
 Put it into effect.
 
 (C)Verify that the installation was successful
 
-#echo $PATH 
+echo $PATH 
 
-#go version
+go version
 
 For example:
 [root@localhost ~]# echo $PATH 
@@ -135,22 +135,22 @@ go version go1.10.3 linux/amd64
 [root@localhost ~]# 
 
 
-4°¢install bft-smart fabric source code    Version£∫1.3.0
+4„ÄÅinstall bft-smart fabric source code    VersionÔºö1.3.0
 
-£®1£© Create a storage directory
+Ôºà1Ôºâ Create a storage directory
 
-#cd $GOPATH
-#mkdir -p src/github.com/hyperledger
-#cd src/github.com/hyperledger
+cd $GOPATH
+mkdir -p src/github.com/hyperledger
+cd src/github.com/hyperledger
 
 
-£®2£©Download the 1.3.0 source code with the following command
+Ôºà2ÔºâDownload the 1.3.0 source code with the following command
 
-#git clone -b release-1.3  https://github.com/jcs47/fabric.git
+git clone -b release-1.3  https://github.com/jcs47/fabric.git
 
-∂˛°¢ Install the bft-smart image
+‰∫å„ÄÅ Install the bft-smart image
 
-1°¢Execute the following commands on each host to install the image
+1„ÄÅExecute the following commands on each host to install the image
 
 docker pull bftsmart/fabric-orderingnode:amd64-1.3.0
 docker tag bftsmart/fabric-orderingnode:amd64-1.3.0 bftsmart/fabric-orderingnode
@@ -168,9 +168,9 @@ docker pull hyperledger/fabric-couchdb:amd64-0.4.10
 docker tag hyperledger/fabric-couchdb:amd64-0.4.10 hyperledger/fabric-couchdb
 
 
-2°¢View the container image£¨ execute the command
+2„ÄÅView the container imageÔºå execute the command
 
-# docker images
+ docker images
 
 [root@localhost ~]# docker images
 REPOSITORY TAG IMAGE ID CREATED SIZE
@@ -188,79 +188,79 @@ hyperledger/fabric-couchdb amd64-0.4.10 3092eca241fc 4 months ago 1.61GB
 hyperledger/fabric-couchdb latest 3092eca241fc 4 months ago 1.61GB
 
 
-»˝°¢Create chain
-1°¢configure the following yaml profiles as required, fill them out according to the template, and place them on separate hosts
+‰∏â„ÄÅCreate chain
+1„ÄÅconfigure the following yaml profiles as required, fill them out according to the template, and place them on separate hosts
 configtx.yaml
 crypto-config.yaml 
 
-Edit the yaml file for each node£∫
+Edit the yaml file for each nodeÔºö
 node*.yaml, frontend*.yaml, peer*.yaml, cli*.yaml
 
-2°¢Generate a certificate
-#cryptogen generate --config=./crypto-config.yaml
+2„ÄÅGenerate a certificate
+cryptogen generate --config=./crypto-config.yaml
 
 Put the corresponding certificate in the corresponding directory for reference
 Copy the certificate to each directory:
 
-keys correspond to node*£¨ frontend* signed signcerts correspond to cert0 ... certn, keystore ∂‘”¶ keystore.pem
+keys correspond to node*Ôºå frontend* signed signcerts correspond to cert0 ... certn, keystore ÂØπÂ∫î keystore.pem
 
-refer to£∫
+refer toÔºö
     ./configuration directory files
 
 	
-3°¢Generate genesisblock£¨  And put it in the corresponding directory
-#configtxgen -profile BFTGenesis -channelID bftchannel -outputBlock genesisblock
+3„ÄÅGenerate genesisblockÔºå  And put it in the corresponding directory
+configtxgen -profile BFTGenesis -channelID bftchannel -outputBlock genesisblock
 
-4°¢Start dockor
+4„ÄÅStart dockor
 
-£®1£©Start each dockor of the node
+Ôºà1ÔºâStart each dockor of the node
 
-#docker-compose -f node*.yaml up -d 
+docker-compose -f node*.yaml up -d 
 
-£®2£©Start each dockert of the frontend 
+Ôºà2ÔºâStart each dockert of the frontend 
 
-#docker-compose -f frontend*.yaml up -d 
+docker-compose -f frontend*.yaml up -d 
 
-£®3£©Start peer of the node
+Ôºà3ÔºâStart peer of the node
 
-#docker-compose -f peer*.yaml up -d  
+docker-compose -f peer*.yaml up -d  
 
-£®4£©Start client
+Ôºà4ÔºâStart client
 
-#docker-compose -f cli*.yaml up -d
+docker-compose -f cli*.yaml up -d
 
-5°¢ Open an interactive mode terminal in the dockor client£¨ the following command£∫
-#docker exec -i -t bft.cli.0  bash
+5„ÄÅ Open an interactive mode terminal in the dockor clientÔºå the following commandÔºö
+docker exec -i -t bft.cli.0  bash
 
 
 Execute the following commands:
 
-£®1£©Generate block
+Ôºà1ÔºâGenerate block
 
-#configtxgen -profile BFTChannel -outputCreateChannelTx channel.tx -channelID spnchannel
-#configtxgen -profile BFTChannel -outputAnchorPeersUpdate anchor.tx -channelID spnchannel -asOrg LaSIGE
+configtxgen -profile BFTChannel -outputCreateChannelTx channel.tx -channelID spnchannel
+configtxgen -profile BFTChannel -outputAnchorPeersUpdate anchor.tx -channelID spnchannel -asOrg LaSIGE
 
-£®2£©Create a channel
-#peer channel create -o 1000.frontend.bft:7050 -c spnchannel -f channel.tx
-#peer channel update -o 1000.frontend.bft:7050 -c spnchannel -f anchor.tx 
+Ôºà2ÔºâCreate a channel
+peer channel create -o 1000.frontend.bft:7050 -c spnchannel -f channel.tx
+peer channel update -o 1000.frontend.bft:7050 -c spnchannel -f anchor.tx 
 
-£®3£©Join channel
+Ôºà3ÔºâJoin channel
 
-#peer channel join -b spnchannel.block
+peer channel join -b spnchannel.block
 
-£®4£©Install the chaincode
+Ôºà4ÔºâInstall the chaincode
 
-#peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
+peer chaincode install -n example02 -v 1.3 -p github.com/hyperledger/fabric/examples/chaincode/go/example02/cmd
 
-£®5£©Initialize the chaincode
+Ôºà5ÔºâInitialize the chaincode
 
-#peer chaincode instantiate -o 1000.frontend.bft:7050 -C spnchannel -n example02 -v 1.3 -c '{"Args":["init","a","100","b","200"]}'
+peer chaincode instantiate -o 1000.frontend.bft:7050 -C spnchannel -n example02 -v 1.3 -c '{"Args":["init","a","100","b","200"]}'
 
-£®6£©The operation of a chaincode
+Ôºà6ÔºâThe operation of a chaincode
 
-#peer chaincode query -C spnchannel -n example02 -c '{"Args":["query","a"]}'
-#peer chaincode invoke -C spnchannel -n example02 -c '{"Args":["invoke","a","b","10"]}'
-#peer chaincode query -C spnchannel -n example02 -c '{"Args":["query","a"]}'
+peer chaincode query -C spnchannel -n example02 -c '{"Args":["query","a"]}'
+peer chaincode invoke -C spnchannel -n example02 -c '{"Args":["invoke","a","b","10"]}'
+peer chaincode query -C spnchannel -n example02 -c '{"Args":["query","a"]}'
 
 
 
